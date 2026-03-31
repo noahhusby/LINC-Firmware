@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# MacOS Specifics
+.DS_Store
+
+# IDE Specifics
+.idea
