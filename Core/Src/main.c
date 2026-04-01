@@ -63,7 +63,7 @@ static void MX_ICACHE_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+uint8_t payload[] = {0x00, 0x4A, 0xFF, 0xFF, 0xFF, 0xFF};
 /* USER CODE END 0 */
 
 /**
