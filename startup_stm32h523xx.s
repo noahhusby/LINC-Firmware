@@ -1,8 +1,8 @@
 /**
   ******************************************************************************
-  * @file      startup_stm32h533xx.s
+  * @file      startup_stm32h523xx.s
   * @author    MCD Application Team
-  * @brief     STM32h533xx devices vector table GCC toolchain.
+  * @brief     STM32h523xx devices vector table GCC toolchain.
   *            This module performs:
   *                - Set the initial SP
   *                - Set the initial PC == Reset_Handler,
@@ -121,7 +121,7 @@ Infinite_Loop:
 
 /******************************************************************************
 *
-* The STM32h533xx vector table.  Note that the proper constructs
+* The STM32h523xx vector table.  Note that the proper constructs
 * must be placed on this to ensure that it ends up at physical address
 * 0x0000.0000.
 *
@@ -183,7 +183,7 @@ g_pfnVectors:
 	.word	GPDMA1_Channel6_IRQHandler
 	.word	GPDMA1_Channel7_IRQHandler
 	.word	IWDG_IRQHandler
-	.word	SAES_IRQHandler
+	.word	0
 	.word	ADC1_IRQHandler
 	.word	DAC1_IRQHandler
 	.word	FDCAN1_IT0_IRQHandler
@@ -262,10 +262,10 @@ g_pfnVectors:
 	.word	0
 	.word	DTS_IRQHandler
 	.word	RNG_IRQHandler
-	.word	OTFDEC1_IRQHandler
-	.word	AES_IRQHandler
+	.word	0
+	.word	0
 	.word	HASH_IRQHandler
-	.word	PKA_IRQHandler
+	.word	0
 	.word	CEC_IRQHandler
 	.word	TIM12_IRQHandler
 	.word	0
@@ -428,9 +428,6 @@ g_pfnVectors:
 
 	.weak	IWDG_IRQHandler
 	.thumb_set IWDG_IRQHandler,Default_Handler
-
-	.weak	SAES_IRQHandler
-	.thumb_set SAES_IRQHandler,Default_Handler
 
 	.weak	ADC1_IRQHandler
 	.thumb_set ADC1_IRQHandler,Default_Handler
@@ -615,17 +612,8 @@ g_pfnVectors:
 	.weak	RNG_IRQHandler
 	.thumb_set RNG_IRQHandler,Default_Handler
 
-	.weak	OTFDEC1_IRQHandler
-	.thumb_set OTFDEC1_IRQHandler,Default_Handler
-
-	.weak	AES_IRQHandler
-	.thumb_set AES_IRQHandler,Default_Handler
-
 	.weak	HASH_IRQHandler
 	.thumb_set HASH_IRQHandler,Default_Handler
-
-	.weak	PKA_IRQHandler
-	.thumb_set PKA_IRQHandler,Default_Handler
 
 	.weak	CEC_IRQHandler
 	.thumb_set CEC_IRQHandler,Default_Handler

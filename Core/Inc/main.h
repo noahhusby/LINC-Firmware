@@ -75,8 +75,8 @@ void Error_Handler(void);
 #define DIO5_GPIO_Port GPIOC
 #define DIO6_Pin GPIO_PIN_5
 #define DIO6_GPIO_Port GPIOC
-#define iREN_Pin GPIO_PIN_0
-#define iREN_GPIO_Port GPIOB
+#define IREN_Pin GPIO_PIN_0
+#define IREN_GPIO_Port GPIOB
 #define iEOI_Pin GPIO_PIN_1
 #define iEOI_GPIO_Port GPIOB
 #define iDAV_Pin GPIO_PIN_2
