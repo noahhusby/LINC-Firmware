@@ -316,7 +316,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIB_EN_Pin|GPIB_DIR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, IREN_Pin|iEOI_Pin|iDAV_Pin|iNRFD_Pin
+  HAL_GPIO_WritePin(GPIOB, iREN_Pin|iEOI_Pin|iDAV_Pin|iNRFD_Pin
                           |iNDAC_Pin|iIFC_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : DIO1_Pin DIO2_Pin DIO3_Pin DIO4_Pin
@@ -343,9 +343,9 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : IREN_Pin iEOI_Pin iDAV_Pin iNRFD_Pin
+  /*Configure GPIO pins : iREN_Pin iEOI_Pin iDAV_Pin iNRFD_Pin
                            iNDAC_Pin iIFC_Pin */
-  GPIO_InitStruct.Pin = IREN_Pin|iEOI_Pin|iDAV_Pin|iNRFD_Pin
+  GPIO_InitStruct.Pin = iREN_Pin|iEOI_Pin|iDAV_Pin|iNRFD_Pin
                           |iNDAC_Pin|iIFC_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
