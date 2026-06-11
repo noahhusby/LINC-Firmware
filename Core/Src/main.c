@@ -301,28 +301,24 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, LED_Pin|iATN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIB_EN_Pin|GPIB_DIR_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, iREN_Pin|iEOI_Pin|iDAV_Pin|iNRFD_Pin
-                          |iNDAC_Pin|iIFC_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : LED_Pin iATN_Pin */
-  GPIO_InitStruct.Pin = LED_Pin|iATN_Pin;
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : DIO1_Pin DIO2_Pin DIO3_Pin DIO4_Pin
                            DIO5_Pin DIO6_Pin DIO7_Pin DIO8_Pin
-                           NRFD_SENSE_Pin */
+                           iATN_Pin NRFD_SENSE_Pin */
   GPIO_InitStruct.Pin = DIO1_Pin|DIO2_Pin|DIO3_Pin|DIO4_Pin
                           |DIO5_Pin|DIO6_Pin|DIO7_Pin|DIO8_Pin
-                          |NRFD_SENSE_Pin;
+                          |iATN_Pin|NRFD_SENSE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -344,9 +340,8 @@ static void MX_GPIO_Init(void)
                            iNDAC_Pin iIFC_Pin */
   GPIO_InitStruct.Pin = iREN_Pin|iEOI_Pin|iDAV_Pin|iNRFD_Pin
                           |iNDAC_Pin|iIFC_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
