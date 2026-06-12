@@ -23,7 +23,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
+
 #include "linc_threads.h"
+#include "main.h"
+#include "stm32h5xx_hal_gpio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,7 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define THREAD_STACK_SIZE 1024
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,11 +48,18 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+uint8_t thread_stack1[THREAD_STACK_SIZE];
+TX_THREAD thread_ptr1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-
+VOID entry(ULONG initial) {
+while (1) {
+  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+  tx_thread_sleep(10);
+}
+}
 /* USER CODE END PFP */
 
 /**
@@ -59,10 +70,16 @@
 UINT App_ThreadX_Init(VOID *memory_ptr)
 {
   UINT ret = TX_SUCCESS;
+
   /* USER CODE BEGIN App_ThreadX_MEM_POOL */
 
   /* USER CODE END App_ThreadX_MEM_POOL */
+
   /* USER CODE BEGIN App_ThreadX_Init */
+  ret = linc_threads_create();
+  // tx_thread_create(&thread_ptr1, "Thread", entry, 0x1234,
+  //                                        thread_stack1, THREAD_STACK_SIZE, 15,
+  //                                        15, 1, TX_AUTO_START);
   /* USER CODE END App_ThreadX_Init */
 
   return ret;
@@ -76,8 +93,6 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 void MX_ThreadX_Init(void)
 {
   /* USER CODE BEGIN Before_Kernel_Start */
-  UINT status = linc_threads_create();
-  if (status != TX_SUCCESS) {}
   /* USER CODE END Before_Kernel_Start */
 
   tx_kernel_enter();

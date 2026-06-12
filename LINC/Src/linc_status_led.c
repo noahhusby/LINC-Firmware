@@ -1,9 +1,9 @@
 #include "linc_status_led.h"
 #include "main.h"
+#include "tx_api.h"
 
-void linc_status_led_thread_entry(ULONG thread_input)
+VOID linc_status_led_thread_entry(ULONG thread_input)
 {
-    (void)thread_input;
     while (1)
     {
         HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);

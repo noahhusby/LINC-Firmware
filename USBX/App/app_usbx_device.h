@@ -42,7 +42,7 @@ extern "C" {
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
-#define USBX_DEVICE_MEMORY_STACK_SIZE       512
+#define USBX_DEVICE_MEMORY_STACK_SIZE       10*1024
 
 #define UX_DEVICE_APP_THREAD_STACK_SIZE   1024
 #define UX_DEVICE_APP_THREAD_PRIO         10
