@@ -96,10 +96,13 @@ int main(void)
   MX_USART1_UART_Init();
   MX_ICACHE_Init();
   /* USER CODE BEGIN 2 */
-  // while (1) {
-  //   HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-  //   HAL_Delay(100);
-  // }
+  // TODO: Remove debug safety block
+  uint16_t i = 0;
+  while (i < 15000) {
+    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+    HAL_Delay(50);
+    i += 50;
+  }
   /* USER CODE END 2 */
 
   MX_ThreadX_Init();
