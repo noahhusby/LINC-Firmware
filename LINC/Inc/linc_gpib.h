@@ -10,9 +10,10 @@
 
 #include "tx_port.h"
 
-#endif //LINC_FIRMWARE_LINC_GPIB_H
+#endif // LINC_FIRMWARE_LINC_GPIB_H
 
-typedef struct {
+typedef struct
+{
     bool srq;
     bool ndac;
     bool nrfd;

@@ -13,11 +13,10 @@
 static TX_MUTEX linc_gpib_status_mutex;
 static linc_gpib_status_t linc_gpib_status;
 
-static bool read_pin(GPIO_TypeDef *port, uint16_t pin) {
-    return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET;
-}
+static bool read_pin(GPIO_TypeDef* port, uint16_t pin) { return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET; }
 
-static void linc_gpib_update_status(void) {
+static void linc_gpib_update_status(void)
+{
     linc_gpib_status_t status = {
         .srq = read_pin(SRQ_SENSE_GPIO_Port, SRQ_SENSE_Pin),
         .ndac = read_pin(NDAC_SENSE_GPIO_Port, NDAC_SENSE_Pin),
@@ -30,18 +29,20 @@ static void linc_gpib_update_status(void) {
     tx_mutex_put(&linc_gpib_status_mutex);
 }
 
-linc_gpib_status_t linc_gpib_get_status(void) {
+linc_gpib_status_t linc_gpib_get_status(void)
+{
     tx_mutex_get(&linc_gpib_status_mutex, TX_WAIT_FOREVER);
     linc_gpib_status_t status = linc_gpib_status;
     tx_mutex_put(&linc_gpib_status_mutex);
     return status;
 }
 
-VOID linc_gpib_thread_entry(ULONG thread_input) {
+VOID linc_gpib_thread_entry(ULONG thread_input)
+{
     tx_mutex_create(&linc_gpib_status_mutex, "LINC GPIB Status", TX_NO_INHERIT);
-    while (1) {
+    while (1)
+    {
         linc_gpib_update_status();
         tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND / 20);
     }
 }
-
