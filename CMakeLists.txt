@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     LINC/Src/linc_status_led.c
     LINC/Src/linc_threads.c
     LINC/Src/linc_gpib.c
+    LINC/Src/linc_usb.c
 )
 
 # Add include paths
