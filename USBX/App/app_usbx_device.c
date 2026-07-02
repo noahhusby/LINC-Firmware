@@ -21,11 +21,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app_usbx_device.h"
 
-#include "main.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "main.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

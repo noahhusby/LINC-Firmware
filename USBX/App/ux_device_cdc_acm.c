@@ -21,11 +21,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "ux_device_cdc_acm.h"
 
-#include "main.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "main.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -68,50 +66,50 @@ extern TX_SEMAPHORE semaphore;
 /* USER CODE END 0 */
 
 /**
- * @brief  USBD_CDC_ACM_Activate
- *         This function is called when insertion of a CDC ACM device.
- * @param  cdc_acm_instance: Pointer to the cdc acm class instance.
- * @retval none
- */
-VOID USBD_CDC_ACM_Activate(VOID* cdc_acm_instance)
+  * @brief  USBD_CDC_ACM_Activate
+  *         This function is called when insertion of a CDC ACM device.
+  * @param  cdc_acm_instance: Pointer to the cdc acm class instance.
+  * @retval none
+  */
+VOID USBD_CDC_ACM_Activate(VOID *cdc_acm_instance)
 {
-    /* USER CODE BEGIN USBD_CDC_ACM_Activate */
+  /* USER CODE BEGIN USBD_CDC_ACM_Activate */
     cdc_acm = (UX_SLAVE_CLASS_CDC_ACM*)cdc_acm_instance;
     if (ux_device_class_cdc_acm_ioctl(cdc_acm, UX_SLAVE_CLASS_CDC_ACM_IOCTL_SET_LINE_CODING, &CDC_VCP_LineCoding) !=
         UX_SUCCESS)
     {
         Error_Handler();
     }
-    /* USER CODE END USBD_CDC_ACM_Activate */
+  /* USER CODE END USBD_CDC_ACM_Activate */
 
-    return;
+  return;
 }
 
 /**
- * @brief  USBD_CDC_ACM_Deactivate
- *         This function is called when extraction of a CDC ACM device.
- * @param  cdc_acm_instance: Pointer to the cdc acm class instance.
- * @retval none
- */
-VOID USBD_CDC_ACM_Deactivate(VOID* cdc_acm_instance)
+  * @brief  USBD_CDC_ACM_Deactivate
+  *         This function is called when extraction of a CDC ACM device.
+  * @param  cdc_acm_instance: Pointer to the cdc acm class instance.
+  * @retval none
+  */
+VOID USBD_CDC_ACM_Deactivate(VOID *cdc_acm_instance)
 {
-    /* USER CODE BEGIN USBD_CDC_ACM_Deactivate */
+  /* USER CODE BEGIN USBD_CDC_ACM_Deactivate */
     UX_PARAMETER_NOT_USED(cdc_acm_instance);
     cdc_acm = UX_NULL;
-    /* USER CODE END USBD_CDC_ACM_Deactivate */
+  /* USER CODE END USBD_CDC_ACM_Deactivate */
 
-    return;
+  return;
 }
 
 /**
- * @brief  USBD_CDC_ACM_ParameterChange
- *         This function is invoked to manage the CDC ACM class requests.
- * @param  cdc_acm_instance: Pointer to the cdc acm class instance.
- * @retval none
- */
-VOID USBD_CDC_ACM_ParameterChange(VOID* cdc_acm_instance)
+  * @brief  USBD_CDC_ACM_ParameterChange
+  *         This function is invoked to manage the CDC ACM class requests.
+  * @param  cdc_acm_instance: Pointer to the cdc acm class instance.
+  * @retval none
+  */
+VOID USBD_CDC_ACM_ParameterChange(VOID *cdc_acm_instance)
 {
-    /* USER CODE BEGIN USBD_CDC_ACM_ParameterChange */
+  /* USER CODE BEGIN USBD_CDC_ACM_ParameterChange */
     UX_PARAMETER_NOT_USED(cdc_acm_instance);
     ULONG request;
     UX_SLAVE_TRANSFER* transfer_request;
@@ -144,9 +142,9 @@ VOID USBD_CDC_ACM_ParameterChange(VOID* cdc_acm_instance)
       break;
     }
 
-        /* USER CODE END USBD_CDC_ACM_ParameterChange */
+  /* USER CODE END USBD_CDC_ACM_ParameterChange */
 
-        return;
+  return;
 }
 
 /* USER CODE BEGIN 1 */
