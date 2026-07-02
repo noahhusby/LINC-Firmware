@@ -3,8 +3,7 @@
 //
 
 #include "linc_usb.h"
-
-#include "main.h"
+#include "linc_usb_console.h"
 
 static linc_usb_t usb;
 
@@ -69,13 +68,6 @@ UINT linc_usb_create(TX_BYTE_POOL* byte_pool)
         return status;
     }
 
-    status = tx_byte_allocate(byte_pool, &usb.rx_queue_memory, LINC_USB_RX_QUEUE_DEPTH * sizeof(VOID*), TX_NO_WAIT);
-
-    if (status != TX_SUCCESS)
-    {
-        return status;
-    }
-
     status = tx_queue_create(&usb.tx_queue, "USB TX", LINC_USB_QUEUE_MESSAGE_WORDS, usb.tx_queue_memory,
                              LINC_USB_TX_QUEUE_DEPTH * sizeof(VOID*));
 
@@ -84,22 +76,7 @@ UINT linc_usb_create(TX_BYTE_POOL* byte_pool)
         return status;
     }
 
-    status = tx_queue_create(&usb.rx_queue, "USB RX", LINC_USB_QUEUE_MESSAGE_WORDS, usb.rx_queue_memory,
-                             LINC_USB_RX_QUEUE_DEPTH * sizeof(VOID*));
-
-    if (status != TX_SUCCESS)
-    {
-        return status;
-    }
-
     status = tx_mutex_create(&usb.tx_packet_mutex, "USB TX Packet Mutex", TX_NO_INHERIT);
-
-    if (status != TX_SUCCESS)
-    {
-        return status;
-    }
-
-    status = tx_mutex_create(&usb.rx_packet_mutex, "USB RX Packet Mutex", TX_NO_INHERIT);
 
     if (status != TX_SUCCESS)
     {
@@ -190,7 +167,9 @@ VOID linc_usb_tx_thread_entry(ULONG thread_input)
         case LINC_USB_ENDPOINT_CONSOLE:
         {
             ULONG actual_length;
-
+#ifndef UX_DEVICE_CLASS_CDC_ACM_TRANSMISSION_DISABLE
+            usb.cdc->ux_slave_class_cdc_acm_transmission_status = UX_FALSE;
+#endif
             ux_device_class_cdc_acm_write(usb.cdc, packet->data, packet->length, &actual_length);
 
             break;
@@ -215,8 +194,41 @@ VOID linc_usb_tx_thread_entry(ULONG thread_input)
 VOID linc_usb_rx_thread_entry(ULONG thread_input)
 {
     UX_PARAMETER_NOT_USED(thread_input);
+
     while (1)
     {
-        tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND);
+        if (!usb.connected || usb.cdc == UX_NULL)
+        {
+            tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND / 10);
+            continue;
+        }
+
+        UCHAR buffer[LINC_USB_MAX_PACKET_SIZE];
+        ULONG actual_length = 0;
+#ifndef UX_DEVICE_CLASS_CDC_ACM_TRANSMISSION_DISABLE
+        usb.cdc->ux_slave_class_cdc_acm_transmission_status = UX_FALSE;
+#endif
+        UINT status = ux_device_class_cdc_acm_read(usb.cdc, buffer, 64, &actual_length);
+
+        if (status != UX_SUCCESS || actual_length == 0)
+        {
+            continue;
+        }
+
+        /* TODO: Determine destination endpoint. */
+        linc_usb_endpoint_t endpoint = LINC_USB_ENDPOINT_CONSOLE;
+
+        switch (endpoint)
+        {
+        case LINC_USB_ENDPOINT_CONSOLE:
+            linc_console_receive(buffer, actual_length);
+            break;
+
+        case LINC_USB_ENDPOINT_VENDOR:
+            break;
+
+        default:
+            break;
+        }
     }
 }

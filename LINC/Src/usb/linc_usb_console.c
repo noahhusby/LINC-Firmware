@@ -6,6 +6,9 @@
 
 #include "linc_usb.h"
 #define LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE 256
+#define LINC_CONSOLE_LINE_BUFFER_SIZE 128
+static char line_buffer[LINC_CONSOLE_LINE_BUFFER_SIZE];
+static ULONG line_length = 0;
 void linc_usb_console_init(void) {}
 
 UINT linc_usb_console_write(const void* buffer, ULONG length)
@@ -42,4 +45,51 @@ UINT linc_usb_console_read(void* buffer, ULONG buffer_length, ULONG* actual_leng
     }
 
     return ux_device_class_cdc_acm_read(linc_usb_cdc(), buffer, buffer_length, actual_length);
+}
+
+void linc_console_receive(const UCHAR* data, ULONG length)
+{
+    for (ULONG i = 0; i < length; i++)
+    {
+        char c = (char)data[i];
+
+        switch (c)
+        {
+        case '\r':
+        case '\n':
+        {
+            if (line_length == 0)
+            {
+                linc_usb_console_write_string("> ");
+                break;
+            }
+
+            line_buffer[line_length] = '\0';
+
+            linc_usb_console_printf("\r\nReceived: %s\r\n> ", line_buffer);
+
+            line_length = 0;
+            break;
+        }
+
+        case '\b':
+        case 0x7F:
+        {
+            if (line_length > 0)
+            {
+                line_length--;
+            }
+            break;
+        }
+
+        default:
+        {
+            if (line_length < (LINC_CONSOLE_LINE_BUFFER_SIZE - 1))
+            {
+                line_buffer[line_length++] = c;
+            }
+            break;
+        }
+        }
+    }
 }

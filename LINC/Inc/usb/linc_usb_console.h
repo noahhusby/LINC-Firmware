@@ -21,4 +21,5 @@ UINT linc_usb_console_printf(const char* format, ...);
 
 UINT linc_usb_console_read(void* buffer, ULONG buffer_length, ULONG* actual_length);
 
+void linc_console_receive(const UCHAR* data, ULONG length);
 #endif
