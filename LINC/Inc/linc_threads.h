@@ -10,4 +10,4 @@
 
 #endif // LINC_FIRMWARE_LINC_THREADS_H
 
-UINT linc_threads_create(void);
+UINT linc_threads_create(TX_BYTE_POOL* byte_pool);

@@ -48,13 +48,15 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     LINC/Src/linc_status_led.c
     LINC/Src/linc_threads.c
     LINC/Src/linc_gpib.c
-    LINC/Src/linc_usb.c
+    LINC/Src/usb/linc_usb.c
+    LINC/Src/usb/linc_usb_console.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     LINC/Inc
+    LINC/Inc/usb
 )
 
 # Add project symbols (macros)

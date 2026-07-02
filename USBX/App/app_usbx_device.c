@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "main.h"
+#include "linc_usb.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,8 +51,6 @@ static TX_THREAD ux_device_app_thread;
 
 /* USER CODE BEGIN PV */
 extern PCD_HandleTypeDef hpcd_USB_DRD_FS;
-static TX_THREAD ux_cdc_write_thread;
-TX_SEMAPHORE semaphore;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -180,15 +179,7 @@ UINT MX_USBX_Device_Init(VOID *memory_ptr)
   }
 
   /* USER CODE BEGIN MX_USBX_Device_Init1 */
-  if (tx_byte_allocate(byte_pool, (VOID **) &pointer, 1024, TX_NO_WAIT) != TX_SUCCESS) {
-    return TX_POOL_ERROR;
-  }
-  tx_semaphore_create(&semaphore, "semaphore", 0);
-
-  if (tx_thread_create(&ux_cdc_write_thread, "cdc_acm_write_usbx_app_thread_entry",
-    usbx_cdc_acm_write_thread_entry, 1, pointer, 1024, 9, 9, TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS) {
-    return TX_THREAD_ERROR;
-  }
+  linc_usb_init();
   /* USER CODE END MX_USBX_Device_Init1 */
 
   return ret;
@@ -216,7 +207,7 @@ static VOID app_ux_device_thread_entry(ULONG thread_input)
 
   HAL_PCD_Start(&hpcd_USB_DRD_FS);
   while (1) {
-    tx_thread_sleep(1000);
+    tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND);
   }
 
   /* USER CODE END app_ux_device_thread_entry */

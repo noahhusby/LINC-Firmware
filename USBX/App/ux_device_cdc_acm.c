@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "main.h"
+#include "linc_usb.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,16 +44,12 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-UX_SLAVE_CLASS_CDC_ACM* cdc_acm = UX_NULL;
 UX_SLAVE_CLASS_CDC_ACM_LINE_CODING_PARAMETER CDC_VCP_LineCoding = {
     115200,
     0x00,
     0x00,
     0x08,
 };
-
-const char Tx_Buffer[] = "Hello World\r\n";
-extern TX_SEMAPHORE semaphore;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -74,8 +71,8 @@ extern TX_SEMAPHORE semaphore;
 VOID USBD_CDC_ACM_Activate(VOID *cdc_acm_instance)
 {
   /* USER CODE BEGIN USBD_CDC_ACM_Activate */
-    cdc_acm = (UX_SLAVE_CLASS_CDC_ACM*)cdc_acm_instance;
-    if (ux_device_class_cdc_acm_ioctl(cdc_acm, UX_SLAVE_CLASS_CDC_ACM_IOCTL_SET_LINE_CODING, &CDC_VCP_LineCoding) !=
+    linc_usb_activate((UX_SLAVE_CLASS_CDC_ACM *)cdc_acm_instance);
+  if (ux_device_class_cdc_acm_ioctl(cdc_acm_instance, UX_SLAVE_CLASS_CDC_ACM_IOCTL_SET_LINE_CODING, &CDC_VCP_LineCoding) !=
         UX_SUCCESS)
     {
         Error_Handler();
@@ -95,7 +92,7 @@ VOID USBD_CDC_ACM_Deactivate(VOID *cdc_acm_instance)
 {
   /* USER CODE BEGIN USBD_CDC_ACM_Deactivate */
     UX_PARAMETER_NOT_USED(cdc_acm_instance);
-    cdc_acm = UX_NULL;
+    linc_usb_deactivate();
   /* USER CODE END USBD_CDC_ACM_Deactivate */
 
   return;
@@ -122,7 +119,7 @@ VOID USBD_CDC_ACM_ParameterChange(VOID *cdc_acm_instance)
     switch (request)
     {
     case UX_SLAVE_CLASS_CDC_ACM_SET_LINE_CODING:
-        if (ux_device_class_cdc_acm_ioctl(cdc_acm, UX_SLAVE_CLASS_CDC_ACM_IOCTL_GET_LINE_CODING, &CDC_VCP_LineCoding) !=
+        if (ux_device_class_cdc_acm_ioctl(linc_usb_cdc(), UX_SLAVE_CLASS_CDC_ACM_IOCTL_GET_LINE_CODING, &CDC_VCP_LineCoding) !=
             UX_SUCCESS)
         {
             Error_Handler();
@@ -130,7 +127,7 @@ VOID USBD_CDC_ACM_ParameterChange(VOID *cdc_acm_instance)
         break;
 
     case UX_SLAVE_CLASS_CDC_ACM_GET_LINE_CODING:
-        if (ux_device_class_cdc_acm_ioctl(cdc_acm, UX_SLAVE_CLASS_CDC_ACM_IOCTL_SET_LINE_CODING, &CDC_VCP_LineCoding) !=
+        if (ux_device_class_cdc_acm_ioctl(linc_usb_cdc(), UX_SLAVE_CLASS_CDC_ACM_IOCTL_SET_LINE_CODING, &CDC_VCP_LineCoding) !=
             UX_SUCCESS)
         {
             Error_Handler();
@@ -148,21 +145,5 @@ VOID USBD_CDC_ACM_ParameterChange(VOID *cdc_acm_instance)
 }
 
 /* USER CODE BEGIN 1 */
-VOID usbx_cdc_acm_write_thread_entry(ULONG thread_input) {
-  UX_PARAMETER_NOT_USED(thread_input);
-  
-  ULONG actual_length;
-  while (1)
-  {
-    tx_semaphore_get(&semaphore, TX_WAIT_FOREVER);
-    if (cdc_acm != UX_NULL)
-    {
-      ux_device_class_cdc_acm_write(
-          cdc_acm,
-          (UCHAR *)Tx_Buffer,
-          strlen(Tx_Buffer),
-          &actual_length);
-    }
-  }
-}
+
 /* USER CODE END 1 */

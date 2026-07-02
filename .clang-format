@@ -1,5 +1,6 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
+TabWidth: 4
 Language: C
 UseTab: Never
 ColumnLimit: 120
