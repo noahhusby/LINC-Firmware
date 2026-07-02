@@ -19,6 +19,7 @@
 #define LINC_USB_MAX_PACKET_SIZE 256
 #define LINC_USB_TX_QUEUE_DEPTH 8
 #define LINC_USB_RX_QUEUE_DEPTH 8
+#define LINC_USB_QUEUE_MESSAGE_WORDS 1
 
 typedef enum
 {
@@ -31,6 +32,7 @@ typedef struct
     linc_usb_endpoint_t endpoint;
     ULONG length;
     UCHAR data[LINC_USB_MAX_PACKET_SIZE];
+    bool allocated;
 } linc_usb_packet_t;
 
 typedef struct
@@ -46,6 +48,15 @@ typedef struct
 
     VOID* tx_stack;
     VOID* rx_stack;
+
+    VOID* tx_queue_memory;
+    VOID* rx_queue_memory;
+
+    linc_usb_packet_t tx_packets[LINC_USB_TX_QUEUE_DEPTH];
+    linc_usb_packet_t rx_packets[LINC_USB_RX_QUEUE_DEPTH];
+
+    TX_MUTEX tx_packet_mutex;
+    TX_MUTEX rx_packet_mutex;
 } linc_usb_t;
 
 void linc_usb_init(void);

@@ -33,6 +33,7 @@ UINT linc_threads_create(TX_BYTE_POOL* byte_pool)
 
     status = tx_thread_create(&linc_gpib_thread, "LINC GPIB", linc_gpib_thread_entry, 0, linc_gpib_stack,
                               LINC_GPIB_STACK_SIZE, LINC_GPIB_PRIORITY, LINC_GPIB_PRIORITY, 1, TX_AUTO_START);
+    linc_usb_init();
     if (linc_usb_create(byte_pool) != TX_SUCCESS)
     {
         return TX_THREAD_ERROR;

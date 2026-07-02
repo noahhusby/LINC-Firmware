@@ -179,7 +179,6 @@ UINT MX_USBX_Device_Init(VOID *memory_ptr)
   }
 
   /* USER CODE BEGIN MX_USBX_Device_Init1 */
-  linc_usb_init();
   /* USER CODE END MX_USBX_Device_Init1 */
 
   return ret;
@@ -207,7 +206,7 @@ static VOID app_ux_device_thread_entry(ULONG thread_input)
 
   HAL_PCD_Start(&hpcd_USB_DRD_FS);
   while (1) {
-    tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND);
+    tx_thread_sleep(100);
   }
 
   /* USER CODE END app_ux_device_thread_entry */

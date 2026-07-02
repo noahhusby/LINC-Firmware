@@ -4,7 +4,40 @@
 
 #include "linc_usb.h"
 
+#include "main.h"
+
 static linc_usb_t usb;
+
+static linc_usb_packet_t* linc_usb_tx_packet_allocate(void)
+{
+    linc_usb_packet_t* packet = UX_NULL;
+
+    tx_mutex_get(&usb.tx_packet_mutex, TX_WAIT_FOREVER);
+
+    for (UINT i = 0; i < LINC_USB_TX_QUEUE_DEPTH; i++)
+    {
+        if (!usb.tx_packets[i].allocated)
+        {
+            usb.tx_packets[i].allocated = true;
+            packet = &usb.tx_packets[i];
+            break;
+        }
+    }
+
+    tx_mutex_put(&usb.tx_packet_mutex);
+
+    return packet;
+}
+
+static void linc_usb_tx_packet_free(linc_usb_packet_t* packet)
+{
+    tx_mutex_get(&usb.tx_packet_mutex, TX_WAIT_FOREVER);
+
+    packet->allocated = false;
+    packet->length = 0;
+
+    tx_mutex_put(&usb.tx_packet_mutex);
+}
 
 void linc_usb_init(void)
 {
@@ -23,6 +56,50 @@ UINT linc_usb_create(TX_BYTE_POOL* byte_pool)
     }
 
     status = tx_byte_allocate(byte_pool, &usb.rx_stack, LINC_USB_THREAD_STACK_SIZE, TX_NO_WAIT);
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_byte_allocate(byte_pool, &usb.tx_queue_memory, LINC_USB_TX_QUEUE_DEPTH * sizeof(VOID*), TX_NO_WAIT);
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_byte_allocate(byte_pool, &usb.rx_queue_memory, LINC_USB_RX_QUEUE_DEPTH * sizeof(VOID*), TX_NO_WAIT);
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_queue_create(&usb.tx_queue, "USB TX", LINC_USB_QUEUE_MESSAGE_WORDS, usb.tx_queue_memory,
+                             LINC_USB_TX_QUEUE_DEPTH * sizeof(VOID*));
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_queue_create(&usb.rx_queue, "USB RX", LINC_USB_QUEUE_MESSAGE_WORDS, usb.rx_queue_memory,
+                             LINC_USB_RX_QUEUE_DEPTH * sizeof(VOID*));
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_mutex_create(&usb.tx_packet_mutex, "USB TX Packet Mutex", TX_NO_INHERIT);
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_mutex_create(&usb.rx_packet_mutex, "USB RX Packet Mutex", TX_NO_INHERIT);
 
     if (status != TX_SUCCESS)
     {
@@ -65,13 +142,24 @@ UINT linc_usb_write(linc_usb_endpoint_t endpoint, const void* buffer, ULONG leng
         return UX_ERROR;
     }
 
-    linc_usb_packet_t packet;
+    linc_usb_packet_t* packet = linc_usb_tx_packet_allocate();
+    if (packet == UX_NULL)
+    {
+        return UX_ERROR;
+    }
 
-    packet.endpoint = endpoint;
-    packet.length = length;
-    memcpy(packet.data, buffer, length);
+    packet->endpoint = endpoint;
+    packet->length = length;
+    memcpy(packet->data, buffer, length);
 
-    return tx_queue_send(&usb.tx_queue, &packet, TX_NO_WAIT);
+    UINT status = tx_queue_send(&usb.tx_queue, &packet, TX_NO_WAIT);
+
+    if (status != TX_SUCCESS)
+    {
+        linc_usb_tx_packet_free(packet);
+    }
+
+    return status;
 }
 
 UX_SLAVE_CLASS_CDC_ACM* linc_usb_cdc(void) { return usb.cdc; }
@@ -79,32 +167,48 @@ UX_SLAVE_CLASS_CDC_ACM* linc_usb_cdc(void) { return usb.cdc; }
 VOID linc_usb_tx_thread_entry(ULONG thread_input)
 {
     UX_PARAMETER_NOT_USED(thread_input);
-    linc_usb_packet_t packet;
+
     while (1)
     {
-        tx_queue_receive(&usb.tx_queue, &packet, TX_WAIT_FOREVER);
-        if (!usb.connected)
+        linc_usb_packet_t* packet;
+
+        UINT status = tx_queue_receive(&usb.tx_queue, &packet, TX_WAIT_FOREVER);
+
+        if (status != TX_SUCCESS)
         {
             continue;
         }
-        switch (packet.endpoint)
+
+        if (!usb.connected)
+        {
+            linc_usb_tx_packet_free(packet);
+            continue;
+        }
+
+        switch (packet->endpoint)
         {
         case LINC_USB_ENDPOINT_CONSOLE:
         {
             ULONG actual_length;
-            ux_device_class_cdc_acm_write(usb.cdc, packet.data, packet.length, &actual_length);
+
+            ux_device_class_cdc_acm_write(usb.cdc, packet->data, packet->length, &actual_length);
+
             break;
         }
+
         case LINC_USB_ENDPOINT_VENDOR:
         {
-            /* TODO: Vendor endpoint implementation. */
+            /* TODO */
             break;
         }
+
         default:
         {
             break;
         }
         }
+
+        linc_usb_tx_packet_free(packet);
     }
 }
 
