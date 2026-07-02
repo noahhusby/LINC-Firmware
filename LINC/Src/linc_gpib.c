@@ -31,10 +31,24 @@ static void linc_gpib_update_status(void)
 
 linc_gpib_status_t linc_gpib_get_status(void)
 {
+
     tx_mutex_get(&linc_gpib_status_mutex, TX_WAIT_FOREVER);
     linc_gpib_status_t status = linc_gpib_status;
     tx_mutex_put(&linc_gpib_status_mutex);
     return status;
+}
+
+void linc_gpib_init_direction(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = GPIB_EN_Pin | GPIB_DIR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  // Default states
+
 }
 
 VOID linc_gpib_thread_entry(ULONG thread_input)

@@ -21,6 +21,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "app_usbx_device.h"
 
+#include "main.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -49,7 +51,9 @@ static UX_SLAVE_CLASS_CDC_ACM_PARAMETER cdc_acm_parameter;
 static TX_THREAD ux_device_app_thread;
 
 /* USER CODE BEGIN PV */
-
+extern PCD_HandleTypeDef hpcd_USB_DRD_FS;
+static TX_THREAD ux_cdc_write_thread;
+TX_SEMAPHORE semaphore;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -178,7 +182,15 @@ UINT MX_USBX_Device_Init(VOID *memory_ptr)
   }
 
   /* USER CODE BEGIN MX_USBX_Device_Init1 */
+  if (tx_byte_allocate(byte_pool, (VOID **) &pointer, 1024, TX_NO_WAIT) != TX_SUCCESS) {
+    return TX_POOL_ERROR;
+  }
+  tx_semaphore_create(&semaphore, "semaphore", 0);
 
+  if (tx_thread_create(&ux_cdc_write_thread, "cdc_acm_write_usbx_app_thread_entry",
+    usbx_cdc_acm_write_thread_entry, 1, pointer, 1024, 9, 9, TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS) {
+    return TX_THREAD_ERROR;
+  }
   /* USER CODE END MX_USBX_Device_Init1 */
 
   return ret;
@@ -193,6 +205,22 @@ static VOID app_ux_device_thread_entry(ULONG thread_input)
 {
   /* USER CODE BEGIN app_ux_device_thread_entry */
   TX_PARAMETER_NOT_USED(thread_input);
+  HAL_PWREx_EnableVddUSB();
+  MX_USB_PCD_Init();
+
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x00, PCD_SNG_BUF, 0x14);
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x80, PCD_SNG_BUF, 0x54);
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPOUT_ADDR, PCD_SNG_BUF, 0x94);
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPIN_ADDR, PCD_SNG_BUF, 0x98);
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPINCMD_ADDR, PCD_SNG_BUF, 0x9C);
+
+  ux_dcd_stm32_initialize((ULONG)USB_DRD_FS, (ULONG)&hpcd_USB_DRD_FS);
+
+  HAL_PCD_Start(&hpcd_USB_DRD_FS);
+  while (1) {
+    tx_thread_sleep(1000);
+  }
+
   /* USER CODE END app_ux_device_thread_entry */
 }
 
