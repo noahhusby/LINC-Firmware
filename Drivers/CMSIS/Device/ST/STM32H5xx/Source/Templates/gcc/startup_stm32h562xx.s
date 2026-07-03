@@ -1,8 +1,8 @@
 /**
   ******************************************************************************
-  * @file      startup_stm32h573xx.s
+  * @file      startup_stm32h562xx.s
   * @author    MCD Application Team
-  * @brief     STM32H563xx devices vector table GCC toolchain.
+  * @brief     STM32H562xx devices vector table GCC toolchain.
   *            This module performs:
   *                - Set the initial SP
   *                - Set the initial PC == Reset_Handler,
@@ -60,6 +60,8 @@ defined in linker script */
 	.type	Reset_Handler, %function
 Reset_Handler:
   ldr   sp, =_estack    /* set stack pointer */
+  ldr   r0, =_sstack
+  msr   MSPLIM, r0      /* set stack pointer limit */
 
 /* Copy the data segment initializers from flash to SRAM */
   movs	r1, #0
