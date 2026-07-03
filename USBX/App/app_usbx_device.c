@@ -50,7 +50,6 @@ static TX_THREAD ux_device_app_thread;
 extern PCD_HandleTypeDef           hpcd_USB_DRD_FS;
 
 /* USER CODE BEGIN PV */
-extern PCD_HandleTypeDef hpcd_USB_DRD_FS;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -213,9 +212,12 @@ static VOID app_ux_device_thread_entry(ULONG thread_input)
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPIN_ADDR, PCD_SNG_BUF, 0x100);
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPINCMD_ADDR, PCD_SNG_BUF, 0x140);
 
-  ux_dcd_stm32_initialize((ULONG)USB_DRD_FS, (ULONG)&hpcd_USB_DRD_FS);
+  if (MX_USBX_Device_Stack_Init() != UX_SUCCESS) {
+    Error_Handler();
+  }
 
   HAL_PCD_Start(&hpcd_USB_DRD_FS);
+  
   while (1) {
     tx_thread_sleep(100);
   }
