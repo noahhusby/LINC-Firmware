@@ -40,4 +40,7 @@ void linc_usb_console_disconnected(void);
 
 void linc_usb_console_begin_write(void);
 UINT linc_usb_console_end_write(void);
+
+void linc_usb_console_clear(void);
+
 #endif

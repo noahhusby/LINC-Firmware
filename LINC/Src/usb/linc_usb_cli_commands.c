@@ -14,11 +14,12 @@
 #define ARRAY_COUNT(x) ((UINT)(sizeof(x) / sizeof((x)[0])))
 
 static UINT cmd_version(UINT argc, char* argv[]);
-static UINT cmd_echo(UINT argc, char* argv[]);
+static UINT cmd_ping(UINT argc, char* argv[]);
 static UINT cmd_usb_status(UINT argc, char* argv[]);
 static UINT cmd_gpib_status(UINT argc, char* argv[]);
 static UINT cmd_gpib_write(UINT argc, char* argv[]);
 static UINT cmd_system_reboot(UINT argc, char* argv[]);
+static UINT cmd_clear(UINT argc, char* argv[]);
 
 static const LINC_USB_CLI_COMMAND usb_commands[] = {
     {
@@ -67,10 +68,16 @@ static const LINC_USB_CLI_COMMAND root_commands[] = {
         .handler = cmd_version,
     },
     {
-        .name = "echo",
-        .description = "Print arguments back to the console",
-        .usage = "echo \"hello world\"",
-        .handler = cmd_echo,
+        .name = "clear",
+        .description = "Clear the console",
+        .usage = "clear",
+        .handler = cmd_clear,
+    },
+    {
+        .name = "ping",
+        .description = "Display a test message",
+        .usage = "ping",
+        .handler = cmd_ping,
     },
     {
         .name = "usb",
@@ -108,19 +115,13 @@ static UINT cmd_version(UINT argc, char* argv[])
     return TX_SUCCESS;
 }
 
-static UINT cmd_echo(UINT argc, char* argv[])
+static UINT cmd_ping(UINT argc, char* argv[])
 {
-    for (UINT i = 0; i < argc; i++)
-    {
-        linc_usb_console_printf("%s", argv[i]);
 
-        if (i + 1 < argc)
-        {
-            linc_usb_console_write_string(" ");
-        }
-    }
+    (void)argc;
+    (void)argv;
 
-    linc_usb_console_write_string("\r\n");
+    linc_usb_console_write_string("Pong!\r\n");
     return TX_SUCCESS;
 }
 
@@ -141,16 +142,28 @@ static UINT cmd_gpib_status(UINT argc, char* argv[])
     linc_gpib_status_t status = linc_gpib_get_status();
 
     linc_usb_console_begin_write();
-    linc_usb_console_printf("GPIB Bus Status\r\n"
-                            "------------------------------\r\n"
-                            "  SRQ  (Service Request)      : %s\r\n"
-                            "  NDAC (Not Data Accepted)    : %s\r\n"
-                            "  NRFD (Not Ready For Data)   : %s\r\n"
-                            "  DAV  (Data Valid)           : %s\r\n"
-                            "  EOI  (End Or Identify)      : %s\r\n",
-                            status.srq ? "ASSERTED" : "RELEASED", status.ndac ? "ASSERTED" : "RELEASED",
-                            status.nrfd ? "ASSERTED" : "RELEASED", status.dav ? "ASSERTED" : "RELEASED",
-                            status.eoi ? "ASSERTED" : "RELEASED");
+    linc_usb_console_write_string("GPIB Bus Status\r\n");
+    linc_usb_console_write_string("------------------------------\r\n");
+
+    linc_usb_console_printf(
+        "  SRQ  (Service Request)      : %s\r\n",
+        status.srq ? "ASSERTED" : "RELEASED");
+
+    linc_usb_console_printf(
+        "  NDAC (Not Data Accepted)    : %s\r\n",
+        status.ndac ? "ASSERTED" : "RELEASED");
+
+    linc_usb_console_printf(
+        "  NRFD (Not Ready For Data)   : %s\r\n",
+        status.nrfd ? "ASSERTED" : "RELEASED");
+
+    linc_usb_console_printf(
+        "  DAV  (Data Valid)           : %s\r\n",
+        status.dav ? "ASSERTED" : "RELEASED");
+
+    linc_usb_console_printf(
+        "  EOI  (End Or Identify)      : %s\r\n",
+        status.eoi ? "ASSERTED" : "RELEASED");
     linc_usb_console_end_write();
     return TX_SUCCESS;
 }
@@ -173,5 +186,14 @@ static UINT cmd_system_reboot(UINT argc, char* argv[])
     (void)argv;
 
     HAL_NVIC_SystemReset();
+    return TX_SUCCESS;
+}
+
+static UINT cmd_clear(UINT argc, char* argv[]) {
+    (void)argc;
+    (void)argv;
+
+    linc_usb_console_clear();
+
     return TX_SUCCESS;
 }

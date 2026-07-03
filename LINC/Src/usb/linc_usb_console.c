@@ -311,3 +311,8 @@ static void linc_usb_console_history_next(void)
 
     linc_usb_console_replace_line(history.entries[slot]);
 }
+
+void linc_usb_console_clear(void)
+{
+    linc_usb_console_write_string("\x1B[2J\x1B[H");
+}
