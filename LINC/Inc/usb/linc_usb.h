@@ -17,6 +17,7 @@
 #define LINC_USB_THREAD_PRIORITY 9
 
 #define LINC_USB_MAX_PACKET_SIZE 64
+#define LINC_USB_TX_BUFFER_SIZE 256
 #define LINC_USB_TX_QUEUE_DEPTH 8
 #define LINC_USB_QUEUE_MESSAGE_WORDS TX_1_ULONG
 
@@ -30,13 +31,14 @@ typedef struct
 {
     linc_usb_endpoint_t endpoint;
     ULONG length;
-    UCHAR data[LINC_USB_MAX_PACKET_SIZE];
+    UCHAR data[LINC_USB_TX_BUFFER_SIZE];
     bool allocated;
 } linc_usb_packet_t;
 
 typedef struct
 {
     bool connected;
+    bool console_session_started;
     UX_SLAVE_CLASS_CDC_ACM* cdc;
 
     TX_THREAD tx_thread;

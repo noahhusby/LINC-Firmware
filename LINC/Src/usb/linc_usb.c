@@ -42,6 +42,7 @@ void linc_usb_init(void)
 {
     memset(&usb, 0, sizeof(usb));
     usb.connected = false;
+    usb.console_session_started = false;
     usb.cdc = UX_NULL;
 }
 
@@ -108,13 +109,15 @@ void linc_usb_activate(UX_SLAVE_CLASS_CDC_ACM* cdc)
 
 void linc_usb_deactivate(void)
 {
+    linc_usb_console_disconnected();
+    usb.console_session_started = false;
     usb.connected = false;
     usb.cdc = UX_NULL;
 }
 
 UINT linc_usb_write(linc_usb_endpoint_t endpoint, const void* buffer, ULONG length)
 {
-    if (length > LINC_USB_MAX_PACKET_SIZE)
+    if (length > LINC_USB_TX_BUFFER_SIZE)
     {
         return UX_ERROR;
     }
@@ -215,13 +218,22 @@ VOID linc_usb_rx_thread_entry(ULONG thread_input)
             continue;
         }
 
+        if (!usb.console_session_started)
+        {
+            usb.console_session_started = true;
+            linc_usb_console_connected();
+
+            /* We will discard the first packet that established the connection. */
+            continue;
+        }
+
         /* TODO: Determine destination endpoint. */
         linc_usb_endpoint_t endpoint = LINC_USB_ENDPOINT_CONSOLE;
 
         switch (endpoint)
         {
         case LINC_USB_ENDPOINT_CONSOLE:
-            linc_console_receive(buffer, actual_length);
+            linc_usb_console_process_input(buffer, actual_length);
             break;
 
         case LINC_USB_ENDPOINT_VENDOR:

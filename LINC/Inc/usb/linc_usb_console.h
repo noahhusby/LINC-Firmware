@@ -14,12 +14,13 @@
 void linc_usb_console_init(void);
 
 UINT linc_usb_console_write(const void* buffer, ULONG length);
-
 UINT linc_usb_console_write_string(const char* string);
-
 UINT linc_usb_console_printf(const char* format, ...);
 
 UINT linc_usb_console_read(void* buffer, ULONG buffer_length, ULONG* actual_length);
 
-void linc_console_receive(const UCHAR* data, ULONG length);
+void linc_usb_console_process_input(const UCHAR* data, ULONG length);
+
+void linc_usb_console_connected(void);
+void linc_usb_console_disconnected(void);
 #endif
