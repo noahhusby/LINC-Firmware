@@ -12,7 +12,18 @@
 #define LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE 256
 #define LINC_USB_CONSOLE_WRITE_BUFFER_SIZE 4096
 
+#define LINC_USB_CONSOLE_HISTORY_SIZE 8
+
 #include "ux_api.h"
+
+typedef struct
+{
+    char entries[LINC_USB_CONSOLE_HISTORY_SIZE][LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE];
+
+    UINT count;
+    UINT head;
+    INT index;
+} linc_usb_console_history_t;
 
 void linc_usb_console_init(void);
 

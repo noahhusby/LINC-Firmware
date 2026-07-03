@@ -9,9 +9,17 @@
 static char line_buffer[LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE];
 static ULONG line_length = 0;
 
+static linc_usb_console_history_t history = {0};
+
 static char write_buffer[LINC_USB_CONSOLE_WRITE_BUFFER_SIZE];
 static ULONG write_length = 0;
 static bool write_active = false;
+
+static void linc_usb_console_history_push(const char* command);
+static void linc_usb_console_history_previous(void);
+static void linc_usb_console_history_next(void);
+static void linc_usb_console_replace_line(const char* line);
+
 void linc_usb_console_init(void) {}
 
 void linc_usb_console_begin_write(void)
@@ -146,7 +154,7 @@ void linc_usb_console_process_input(const UCHAR* data, ULONG length)
             }
 
             line_buffer[line_length] = '\0';
-
+            linc_usb_console_history_push(line_buffer);
             linc_usb_cli_process_line(line_buffer);
 
             line_length = 0;
@@ -166,6 +174,30 @@ void linc_usb_console_process_input(const UCHAR* data, ULONG length)
 
                 /* Erase the character on the user's terminal */
                 linc_usb_console_write_string("\b \b");
+            }
+
+            break;
+        }
+
+        case 0x1B:
+        {
+            if ((i + 2) < length && data[i + 1] == '[')
+            {
+                switch (data[i + 2])
+                {
+                case 'A':
+                    linc_usb_console_history_previous();
+                    break;
+
+                case 'B':
+                    linc_usb_console_history_next();
+                    break;
+
+                default:
+                    break;
+                }
+
+                i += 2;
             }
 
             break;
@@ -191,4 +223,91 @@ void linc_usb_console_process_input(const UCHAR* data, ULONG length)
         }
         }
     }
+}
+
+static void linc_usb_console_replace_line(const char* line)
+{
+    while (line_length > 0)
+    {
+        linc_usb_console_write_string("\b \b");
+        line_length--;
+    }
+
+    strncpy(line_buffer, line, sizeof(line_buffer) - 1);
+
+    line_buffer[sizeof(line_buffer) - 1] = '\0';
+
+    line_length = strlen(line_buffer);
+
+    linc_usb_console_write(line_buffer, line_length);
+}
+
+static void linc_usb_console_history_push(const char* command)
+{
+    if (command[0] == '\0')
+    {
+        return;
+    }
+
+    if (history.count > 0)
+    {
+        UINT newest = (history.head + LINC_USB_CONSOLE_HISTORY_SIZE - 1) % LINC_USB_CONSOLE_HISTORY_SIZE;
+
+        if (strcmp(history.entries[newest], command) == 0)
+        {
+            history.index = -1;
+            return;
+        }
+    }
+
+    strncpy(history.entries[history.head], command, LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE - 1);
+
+    history.entries[history.head][LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE - 1] = '\0';
+
+    history.head = (history.head + 1) % LINC_USB_CONSOLE_HISTORY_SIZE;
+
+    if (history.count < LINC_USB_CONSOLE_HISTORY_SIZE)
+    {
+        history.count++;
+    }
+
+    history.index = -1;
+}
+
+static void linc_usb_console_history_previous(void)
+{
+    if (history.count == 0)
+    {
+        return;
+    }
+
+    if (history.index < (INT)history.count - 1)
+    {
+        history.index++;
+    }
+
+    UINT slot = (history.head + LINC_USB_CONSOLE_HISTORY_SIZE - 1 - history.index) % LINC_USB_CONSOLE_HISTORY_SIZE;
+
+    linc_usb_console_replace_line(history.entries[slot]);
+}
+
+static void linc_usb_console_history_next(void)
+{
+    if (history.count == 0)
+    {
+        return;
+    }
+
+    if (history.index <= 0)
+    {
+        history.index = -1;
+        linc_usb_console_replace_line("");
+        return;
+    }
+
+    history.index--;
+
+    UINT slot = (history.head + LINC_USB_CONSOLE_HISTORY_SIZE - 1 - history.index) % LINC_USB_CONSOLE_HISTORY_SIZE;
+
+    linc_usb_console_replace_line(history.entries[slot]);
 }
