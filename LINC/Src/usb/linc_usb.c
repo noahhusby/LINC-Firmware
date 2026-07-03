@@ -132,7 +132,7 @@ UINT linc_usb_write(linc_usb_endpoint_t endpoint, const void* buffer, ULONG leng
     packet->length = length;
     memcpy(packet->data, buffer, length);
 
-    UINT status = tx_queue_send(&usb.tx_queue, &packet, TX_NO_WAIT);
+    UINT status = tx_queue_send(&usb.tx_queue, &packet, TX_WAIT_FOREVER);
 
     if (status != TX_SUCCESS)
     {

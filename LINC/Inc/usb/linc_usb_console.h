@@ -9,6 +9,9 @@
 
 #include <stdarg.h>
 
+#define LINC_USB_CONSOLE_PRINTF_BUFFER_SIZE 256
+#define LINC_USB_CONSOLE_WRITE_BUFFER_SIZE 4096
+
 #include "ux_api.h"
 
 void linc_usb_console_init(void);
@@ -23,4 +26,7 @@ void linc_usb_console_process_input(const UCHAR* data, ULONG length);
 
 void linc_usb_console_connected(void);
 void linc_usb_console_disconnected(void);
+
+void linc_usb_console_begin_write(void);
+UINT linc_usb_console_end_write(void);
 #endif

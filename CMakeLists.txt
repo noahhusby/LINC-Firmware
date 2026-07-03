@@ -52,6 +52,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     LINC/Src/usb/linc_usb_console.c
     LINC/Src/usb/linc_usb_cli.c
     LINC/Src/usb/linc_usb_cli_commands.c
+    LINC/Src/usb/linc_usb_cli_parser.c
 )
 
 # Add include paths

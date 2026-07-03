@@ -24,7 +24,7 @@ typedef struct LINC_USB_CLI_COMMAND
     UINT child_count;
 } LINC_USB_CLI_COMMAND;
 
-void linc_usb_cli_init(void);
+void linc_usb_cli_start(void);
 void linc_usb_cli_process_line(char* line);
 void linc_usb_cli_print_prompt(void);
 

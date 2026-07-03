@@ -2,11 +2,14 @@
 // Created by Noah Husby on 7/2/26.
 //
 
-#include "usb/linc_usb_cli_commands.h"
+#include "linc_usb_cli_commands.h"
 
 #include <string.h>
 
-#include "usb/linc_usb_console.h"
+#include "linc_gpib.h"
+#include "main.h"
+
+#include "linc_usb_console.h"
 
 #define ARRAY_COUNT(x) ((UINT)(sizeof(x) / sizeof((x)[0])))
 
@@ -135,7 +138,20 @@ static UINT cmd_gpib_status(UINT argc, char* argv[])
     (void)argc;
     (void)argv;
 
-    linc_usb_console_write_string("GPIB status: TODO\r\n");
+    linc_gpib_status_t status = linc_gpib_get_status();
+
+    linc_usb_console_begin_write();
+    linc_usb_console_printf("GPIB Bus Status\r\n"
+                            "------------------------------\r\n"
+                            "  SRQ  (Service Request)      : %s\r\n"
+                            "  NDAC (Not Data Accepted)    : %s\r\n"
+                            "  NRFD (Not Ready For Data)   : %s\r\n"
+                            "  DAV  (Data Valid)           : %s\r\n"
+                            "  EOI  (End Or Identify)      : %s\r\n",
+                            status.srq ? "ASSERTED" : "RELEASED", status.ndac ? "ASSERTED" : "RELEASED",
+                            status.nrfd ? "ASSERTED" : "RELEASED", status.dav ? "ASSERTED" : "RELEASED",
+                            status.eoi ? "ASSERTED" : "RELEASED");
+    linc_usb_console_end_write();
     return TX_SUCCESS;
 }
 
@@ -156,6 +172,6 @@ static UINT cmd_system_reboot(UINT argc, char* argv[])
     (void)argc;
     (void)argv;
 
-    linc_usb_console_write_string("System reboot: TODO\r\n");
+    HAL_NVIC_SystemReset();
     return TX_SUCCESS;
 }
