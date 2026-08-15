@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     LINC/Src/linc_status_led.c
     LINC/Src/linc_threads.c
     LINC/Src/linc_gpib.c
+    LINC/Src/linc_time.c
     LINC/Src/usb/linc_usb.c
     LINC/Src/usb/linc_usb_console.c
     LINC/Src/usb/linc_usb_cli.c

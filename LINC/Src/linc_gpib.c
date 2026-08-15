@@ -10,11 +10,19 @@
 #include "main.h"
 #include "stm32h523xx.h"
 #include "stm32h5xx_hal_gpio.h"
+#include "linc_time.h"
 
 #define LINC_GPIB_QUEUE_DEPTH 8
 
 #define LINC_GPIB_STACK_SIZE 2048
 #define LINC_GPIB_PRIORITY 10
+
+#define GPIB_COMMAND_UNL 0x3F
+#define GPIB_COMMAND_UNT 0x5F
+#define LINC_GPIB_T1_US 2U
+
+#define GPIB_LISTEN_ADDRESS(address) ((uint8_t)(0x20U | (address)))
+#define GPIB_TALK_ADDRESS(address) ((uint8_t)(0x40U | (address)))
 
 static TX_THREAD linc_gpib_thread;
 static VOID* linc_gpib_stack;
@@ -153,6 +161,124 @@ static void linc_gpib_init_management(void)
     HAL_GPIO_Init(GPIOC, &GPIOC_InitStruct);
 }
 
+static void linc_gpib_atn_assert(void) { HAL_GPIO_WritePin(iATN_GPIO_Port, iATN_Pin, GPIO_PIN_RESET); }
+
+static void linc_gpib_atn_release(void) { HAL_GPIO_WritePin(iATN_GPIO_Port, iATN_Pin, GPIO_PIN_SET); }
+
+static void linc_gpib_dav_assert(void) { HAL_GPIO_WritePin(iDAV_GPIO_Port, iDAV_Pin, GPIO_PIN_RESET); }
+
+static void linc_gpib_dav_release(void) { HAL_GPIO_WritePin(iDAV_GPIO_Port, iDAV_Pin, GPIO_PIN_SET); }
+
+static void linc_gpib_eoi_assert(void) { HAL_GPIO_WritePin(iEOI_GPIO_Port, iEOI_Pin, GPIO_PIN_RESET); }
+
+static void linc_gpib_eoi_release(void) { HAL_GPIO_WritePin(iEOI_GPIO_Port, iEOI_Pin, GPIO_PIN_SET); }
+
+static void linc_gpib_write_data_bus(uint8_t data)
+{
+    HAL_GPIO_WritePin(DIO1_GPIO_Port, DIO1_Pin, (data & (1U << 0)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO2_GPIO_Port, DIO2_Pin, (data & (1U << 1)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO3_GPIO_Port, DIO3_Pin, (data & (1U << 2)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO4_GPIO_Port, DIO4_Pin, (data & (1U << 3)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO5_GPIO_Port, DIO5_Pin, (data & (1U << 4)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO6_GPIO_Port, DIO6_Pin, (data & (1U << 5)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO7_GPIO_Port, DIO7_Pin, (data & (1U << 6)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    HAL_GPIO_WritePin(DIO8_GPIO_Port, DIO8_Pin, (data & (1U << 7)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+}
+
+static bool linc_gpib_wait_pin(GPIO_TypeDef* port, uint16_t pin, bool state, ULONG timeout_ticks)
+{
+    ULONG start = tx_time_get();
+
+    while (read_pin(port, pin) != state)
+    {
+        if ((tx_time_get() - start) >= timeout_ticks)
+        {
+            return false;
+        }
+
+        tx_thread_relinquish();
+    }
+
+    return true;
+}
+
+static bool linc_gpib_wait_nrfd_released(ULONG timeout)
+{
+    return linc_gpib_wait_pin(NRFD_SENSE_GPIO_Port, NRFD_SENSE_Pin, false, timeout);
+}
+
+static bool linc_gpib_wait_ndac_released(ULONG timeout)
+{
+    return linc_gpib_wait_pin(NDAC_SENSE_GPIO_Port, NDAC_SENSE_Pin, false, timeout);
+}
+
+static bool linc_gpib_wait_ndac_asserted(ULONG timeout)
+{
+    return linc_gpib_wait_pin(NDAC_SENSE_GPIO_Port, NDAC_SENSE_Pin, true, timeout);
+}
+
+static bool linc_gpib_wait_nrfd_asserted(ULONG timeout)
+{
+    return linc_gpib_wait_pin(NRFD_SENSE_GPIO_Port, NRFD_SENSE_Pin, true, timeout);
+}
+
+static linc_gpib_result_t linc_gpib_write_byte(uint8_t data, bool send_eoi, ULONG timeout_ticks)
+{
+    linc_gpib_dav_release();
+
+    if (send_eoi)
+    {
+        linc_gpib_eoi_assert();
+    }
+    else
+    {
+        linc_gpib_eoi_release();
+    }
+
+    linc_gpib_write_data_bus(data);
+
+    /*
+     * Wait until all listeners are ready for data.
+     */
+    if (!linc_gpib_wait_nrfd_released(timeout_ticks))
+    {
+        linc_gpib_eoi_release();
+        return LINC_GPIB_TIMEOUT;
+    }
+
+    linc_time_delay_us(LINC_GPIB_T1_US);
+    linc_gpib_dav_assert();
+
+    /*
+     * Wait until all listeners have accepted the byte.
+     */
+    if (!linc_gpib_wait_ndac_released(timeout_ticks))
+    {
+        linc_gpib_dav_release();
+        linc_gpib_eoi_release();
+        return LINC_GPIB_TIMEOUT;
+    }
+
+    /*
+     * End the transfer.
+     */
+    linc_gpib_dav_release();
+
+    /*
+     * Wait for listeners to return NDAC to the asserted
+     * state before changing DIO for the next byte.
+     */
+    if (!linc_gpib_wait_ndac_asserted(timeout_ticks))
+    {
+        linc_gpib_eoi_release();
+        return LINC_GPIB_TIMEOUT;
+    }
+
+    linc_gpib_eoi_release();
+
+    return LINC_GPIB_OK;
+}
+
 static void linc_gpib_init(void)
 {
     linc_gpib_init_data_bus();
@@ -215,13 +341,99 @@ static UINT linc_gpib_submit(linc_gpib_request_t* request)
 
 static linc_gpib_result_t linc_gpib_process_write(linc_gpib_request_t* request)
 {
-    /*
-     * TODO:
-     * Address instrument as listener.
-     * Transmit request->tx_data.
-     */
+    if (request == NULL || request->tx_data == NULL || request->tx_length == 0)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
 
-    return LINC_GPIB_OK;
+    linc_gpib_result_t result = LINC_GPIB_ERROR;
+
+    /*
+     * Establish known source-handshake state first.
+     */
+    linc_gpib_dav_release();
+    linc_gpib_eoi_release();
+    linc_gpib_atn_release();
+
+    /*
+     * We are the talker for the command/address phase.
+     */
+    linc_gpib_data_bus_transmit();
+
+    /*
+     * Command phase.
+     */
+    linc_gpib_atn_assert();
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_LISTEN_ADDRESS(request->address), false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    /*
+     * Data phase.
+     */
+    linc_gpib_atn_release();
+
+    for (size_t i = 0; i < request->tx_length; i++)
+    {
+        bool eoi = request->send_eoi && (i == request->tx_length - 1);
+
+        result = linc_gpib_write_byte(request->tx_data[i], eoi, request->timeout_ticks);
+
+        if (result != LINC_GPIB_OK)
+        {
+            goto cleanup;
+        }
+    }
+
+cleanup:
+    /*
+     * Return the bus to the idle controller state.
+     */
+    linc_gpib_dav_release();
+    linc_gpib_eoi_release();
+
+    /*
+     * Unaddress all listeners so the bus is left in a
+     * known state for the next transaction.
+     */
+    linc_gpib_atn_assert();
+
+    if (result == LINC_GPIB_OK)
+    {
+        linc_gpib_result_t cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+        if (cleanup_result != LINC_GPIB_OK)
+        {
+            result = cleanup_result;
+        }
+    }
+
+    linc_gpib_atn_release();
+
+    /*
+     * Return the transceiver to high impedance.
+     */
+    linc_gpib_enable_communication(false);
+
+    return result;
 }
 
 static linc_gpib_result_t linc_gpib_process_read(linc_gpib_request_t* request)
