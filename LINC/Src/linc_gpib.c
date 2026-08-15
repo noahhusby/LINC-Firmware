@@ -10,8 +10,22 @@
 #include "main.h"
 #include "stm32h523xx.h"
 #include "stm32h5xx_hal_gpio.h"
+
+#define LINC_GPIB_QUEUE_DEPTH 8
+
+#define LINC_GPIB_STACK_SIZE 2048
+#define LINC_GPIB_PRIORITY 10
+
+static TX_THREAD linc_gpib_thread;
+static VOID* linc_gpib_stack;
+
 static TX_MUTEX linc_gpib_status_mutex;
 static linc_gpib_status_t linc_gpib_status;
+
+static TX_QUEUE linc_gpib_queue;
+static ULONG linc_gpib_queue_storage[LINC_GPIB_QUEUE_DEPTH];
+
+static VOID linc_gpib_thread_entry(ULONG thread_input);
 
 static bool read_pin(GPIO_TypeDef* port, uint16_t pin) { return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET; }
 
@@ -43,42 +57,73 @@ static void linc_gpib_enable_communication(bool enable)
     HAL_GPIO_WritePin(GPIB_EN_GPIO_Port, GPIB_EN_Pin, enable ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
-static void linc_gpib_set_direction(enum CommunicationDirection direction)
+static void linc_gpib_data_bus_receive(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-    if (direction == CONTROLLER_TO_INSTRUMENT)
-    {
-        HAL_GPIO_WritePin(GPIB_DIR_GPIO_Port, GPIB_DIR_Pin, GPIO_PIN_RESET);
-        GPIO_InitStruct.Pin = DIO1_Pin | DIO2_Pin | DIO3_Pin | DIO4_Pin | DIO5_Pin | DIO6_Pin | DIO7_Pin | DIO8_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-        HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-    }
-    else
-    {
-        GPIO_InitStruct.Pin = DIO1_Pin | DIO2_Pin | DIO3_Pin | DIO4_Pin | DIO5_Pin | DIO6_Pin | DIO7_Pin | DIO8_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-        HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-        HAL_GPIO_WritePin(GPIB_DIR_GPIO_Port, GPIB_DIR_Pin, GPIO_PIN_SET);
-    }
+
+    linc_gpib_enable_communication(false);
+
+    GPIO_InitStruct.Pin = DIO1_Pin | DIO2_Pin | DIO3_Pin | DIO4_Pin | DIO5_Pin | DIO6_Pin | DIO7_Pin | DIO8_Pin;
+
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(GPIB_DIR_GPIO_Port, GPIB_DIR_Pin, GPIO_PIN_RESET);
+
+    linc_gpib_enable_communication(true);
+}
+
+static void linc_gpib_data_bus_transmit(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    linc_gpib_enable_communication(false);
+
+    HAL_GPIO_WritePin(GPIB_DIR_GPIO_Port, GPIB_DIR_Pin, GPIO_PIN_SET);
+
+    GPIO_InitStruct.Pin = DIO1_Pin | DIO2_Pin | DIO3_Pin | DIO4_Pin | DIO5_Pin | DIO6_Pin | DIO7_Pin | DIO8_Pin;
+
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    linc_gpib_enable_communication(true);
 }
 
 static void linc_gpib_init_data_bus(void)
 {
-    // Pre-define comms settings
-    linc_gpib_enable_communication(false);
-    linc_gpib_set_direction(CONTROLLER_TO_INSTRUMENT);
-
     GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /*
+     * Preload safe control states:
+     * EN high  = disabled
+     * DIR low  = GPIB -> MCU
+     */
+    HAL_GPIO_WritePin(GPIB_EN_GPIO_Port, GPIB_EN_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIB_DIR_GPIO_Port, GPIB_DIR_Pin, GPIO_PIN_RESET);
+
     GPIO_InitStruct.Pin = GPIB_EN_Pin | GPIB_DIR_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
 
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /*
+     * MCU data pins start as inputs.
+     */
+    GPIO_InitStruct.Pin = DIO1_Pin | DIO2_Pin | DIO3_Pin | DIO4_Pin | DIO5_Pin | DIO6_Pin | DIO7_Pin | DIO8_Pin;
+
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    linc_gpib_enable_communication(false);
 }
 
 static void linc_gpib_init_management(void)
@@ -114,12 +159,160 @@ void linc_gpib_init(void)
     linc_gpib_init_management();
 }
 
-VOID linc_gpib_thread_entry(ULONG thread_input)
+UINT linc_gpib_create(TX_BYTE_POOL* byte_pool)
 {
-    tx_mutex_create(&linc_gpib_status_mutex, "LINC GPIB Status", TX_NO_INHERIT);
+    UINT status;
+
+    if (byte_pool == NULL)
+    {
+        return TX_PTR_ERROR;
+    }
+
+    status = tx_mutex_create(&linc_gpib_status_mutex, "LINC GPIB Status", TX_INHERIT);
+
+    if (status != TX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = tx_queue_create(&linc_gpib_queue, "LINC GPIB Queue", TX_1_ULONG, linc_gpib_queue_storage,
+                             sizeof(linc_gpib_queue_storage));
+
+    if (status != TX_SUCCESS)
+    {
+        tx_mutex_delete(&linc_gpib_status_mutex);
+        return status;
+    }
+
+    status = tx_byte_allocate(byte_pool, &linc_gpib_stack, LINC_GPIB_STACK_SIZE, TX_NO_WAIT);
+
+    if (status != TX_SUCCESS)
+    {
+        tx_queue_delete(&linc_gpib_queue);
+        tx_mutex_delete(&linc_gpib_status_mutex);
+        return status;
+    }
+
+    status =
+        tx_thread_create(&linc_gpib_thread, "LINC GPIB", linc_gpib_thread_entry, 0, linc_gpib_stack,
+                         LINC_GPIB_STACK_SIZE, LINC_GPIB_PRIORITY, LINC_GPIB_PRIORITY, TX_NO_TIME_SLICE, TX_AUTO_START);
+
+    if (status != TX_SUCCESS)
+    {
+        tx_byte_release(linc_gpib_stack);
+        tx_queue_delete(&linc_gpib_queue);
+        tx_mutex_delete(&linc_gpib_status_mutex);
+        return status;
+    }
+
+    return TX_SUCCESS;
+}
+
+static UINT linc_gpib_submit(linc_gpib_request_t* request)
+{
+    return tx_queue_send(&linc_gpib_queue, &request, TX_WAIT_FOREVER);
+}
+
+static linc_gpib_result_t linc_gpib_process_write(linc_gpib_request_t* request)
+{
+    /*
+     * TODO:
+     * Address instrument as listener.
+     * Transmit request->tx_data.
+     */
+
+    return LINC_GPIB_OK;
+}
+
+static linc_gpib_result_t linc_gpib_process_read(linc_gpib_request_t* request)
+{
+    /*
+     * TODO:
+     * Address instrument as talker.
+     * Receive into request->rx_data.
+     */
+
+    return LINC_GPIB_OK;
+}
+
+static linc_gpib_result_t linc_gpib_process_write_read(linc_gpib_request_t* request)
+{
+    /*
+     * TODO:
+     * Write command.
+     * Turn bus around.
+     * Read response.
+     */
+
+    return LINC_GPIB_OK;
+}
+
+static linc_gpib_result_t linc_gpib_process_clear(linc_gpib_request_t* request)
+{
+    (void)request;
+
+    /*
+     * TODO:
+     * Implement GPIB device clear.
+     */
+
+    return LINC_GPIB_OK;
+}
+
+static void linc_gpib_process_request(linc_gpib_request_t* request)
+{
+    if (request == NULL)
+    {
+        return;
+    }
+
+    request->rx_length = 0;
+
+    switch (request->type)
+    {
+    case LINC_GPIB_REQUEST_WRITE:
+        request->result = linc_gpib_process_write(request);
+        break;
+
+    case LINC_GPIB_REQUEST_READ:
+        request->result = linc_gpib_process_read(request);
+        break;
+
+    case LINC_GPIB_REQUEST_WRITE_READ:
+        request->result = linc_gpib_process_write_read(request);
+        break;
+
+    case LINC_GPIB_REQUEST_CLEAR:
+        request->result = linc_gpib_process_clear(request);
+        break;
+
+    default:
+        request->result = LINC_GPIB_INVALID_ARGUMENT;
+        break;
+    }
+}
+
+static VOID linc_gpib_thread_entry(ULONG thread_input)
+{
+    (void)thread_input;
+
+    linc_gpib_request_t* request = NULL;
+
+    linc_gpib_init();
+
     while (1)
     {
-        linc_gpib_update_status();
-        tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND / 20);
+        UINT status = tx_queue_receive(&linc_gpib_queue, &request, TX_TIMER_TICKS_PER_SECOND / 20);
+
+        if (status == TX_SUCCESS)
+        {
+            linc_gpib_process_request(request);
+            linc_gpib_update_status();
+            tx_semaphore_put(&request->complete);
+        }
+        else if (status == TX_QUEUE_EMPTY)
+        {
+            linc_gpib_update_status();
+        }
     }
 }
