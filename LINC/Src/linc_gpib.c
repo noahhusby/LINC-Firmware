@@ -21,6 +21,7 @@
 #define GPIB_COMMAND_UNT 0x5F
 #define LINC_GPIB_T1_US 2U
 
+#define LINC_GPIB_CONTROLLER_ADDRESS 0U
 #define GPIB_LISTEN_ADDRESS(address) ((uint8_t)(0x20U | (address)))
 #define GPIB_TALK_ADDRESS(address) ((uint8_t)(0x40U | (address)))
 
@@ -173,6 +174,14 @@ static void linc_gpib_eoi_assert(void) { HAL_GPIO_WritePin(iEOI_GPIO_Port, iEOI_
 
 static void linc_gpib_eoi_release(void) { HAL_GPIO_WritePin(iEOI_GPIO_Port, iEOI_Pin, GPIO_PIN_SET); }
 
+static void linc_gpib_nrfd_assert(void) { HAL_GPIO_WritePin(iNRFD_GPIO_Port, iNRFD_Pin, GPIO_PIN_RESET); }
+
+static void linc_gpib_nrfd_release(void) { HAL_GPIO_WritePin(iNRFD_GPIO_Port, iNRFD_Pin, GPIO_PIN_SET); }
+
+static void linc_gpib_ndac_assert(void) { HAL_GPIO_WritePin(iNDAC_GPIO_Port, iNDAC_Pin, GPIO_PIN_RESET); }
+
+static void linc_gpib_ndac_release(void) { HAL_GPIO_WritePin(iNDAC_GPIO_Port, iNDAC_Pin, GPIO_PIN_SET); }
+
 static void linc_gpib_write_data_bus(uint8_t data)
 {
     HAL_GPIO_WritePin(DIO1_GPIO_Port, DIO1_Pin, (data & (1U << 0)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
@@ -183,6 +192,37 @@ static void linc_gpib_write_data_bus(uint8_t data)
     HAL_GPIO_WritePin(DIO6_GPIO_Port, DIO6_Pin, (data & (1U << 5)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
     HAL_GPIO_WritePin(DIO7_GPIO_Port, DIO7_Pin, (data & (1U << 6)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
     HAL_GPIO_WritePin(DIO8_GPIO_Port, DIO8_Pin, (data & (1U << 7)) ? GPIO_PIN_RESET : GPIO_PIN_SET);
+}
+
+static uint8_t linc_gpib_read_data_bus(void)
+{
+    uint8_t data = 0;
+
+    if (HAL_GPIO_ReadPin(DIO1_GPIO_Port, DIO1_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 0);
+
+    if (HAL_GPIO_ReadPin(DIO2_GPIO_Port, DIO2_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 1);
+
+    if (HAL_GPIO_ReadPin(DIO3_GPIO_Port, DIO3_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 2);
+
+    if (HAL_GPIO_ReadPin(DIO4_GPIO_Port, DIO4_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 3);
+
+    if (HAL_GPIO_ReadPin(DIO5_GPIO_Port, DIO5_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 4);
+
+    if (HAL_GPIO_ReadPin(DIO6_GPIO_Port, DIO6_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 5);
+
+    if (HAL_GPIO_ReadPin(DIO7_GPIO_Port, DIO7_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 6);
+
+    if (HAL_GPIO_ReadPin(DIO8_GPIO_Port, DIO8_Pin) == GPIO_PIN_RESET)
+        data |= (1U << 7);
+
+    return data;
 }
 
 static bool linc_gpib_wait_pin(GPIO_TypeDef* port, uint16_t pin, bool state, ULONG timeout_ticks)
@@ -222,6 +262,70 @@ static bool linc_gpib_wait_nrfd_asserted(ULONG timeout)
     return linc_gpib_wait_pin(NRFD_SENSE_GPIO_Port, NRFD_SENSE_Pin, true, timeout);
 }
 
+static bool linc_gpib_wait_dav_asserted(ULONG timeout)
+{
+    return linc_gpib_wait_pin(DAV_SENSE_GPIO_Port, DAV_SENSE_Pin, true, timeout);
+}
+
+static bool linc_gpib_wait_dav_released(ULONG timeout)
+{
+    return linc_gpib_wait_pin(DAV_SENSE_GPIO_Port, DAV_SENSE_Pin, false, timeout);
+}
+
+static linc_gpib_result_t linc_gpib_read_byte(uint8_t* data, bool* eoi, ULONG timeout_ticks)
+{
+    if (data == NULL || eoi == NULL)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
+
+    /*
+     * Start ready for a new byte:
+     * not accepted yet, but ready to receive.
+     */
+    linc_gpib_ndac_assert();
+    linc_gpib_nrfd_release();
+
+    /*
+     * Wait for talker to present valid data.
+     */
+    if (!linc_gpib_wait_dav_asserted(timeout_ticks))
+    {
+        linc_gpib_nrfd_assert();
+        linc_gpib_ndac_assert();
+        return LINC_GPIB_TIMEOUT;
+    }
+
+    /*
+     * Hold off the next byte while consuming this one.
+     */
+    linc_gpib_nrfd_assert();
+
+    *data = linc_gpib_read_data_bus();
+    *eoi = read_pin(EOI_SENSE_GPIO_Port, EOI_SENSE_Pin);
+
+    /*
+     * Acknowledge acceptance.
+     */
+    linc_gpib_ndac_release();
+
+    /*
+     * Wait for talker to end this transfer.
+     */
+    if (!linc_gpib_wait_dav_released(timeout_ticks))
+    {
+        linc_gpib_ndac_assert();
+        return LINC_GPIB_TIMEOUT;
+    }
+
+    /*
+     * Prepare for the next byte.
+     */
+    linc_gpib_ndac_assert();
+
+    return LINC_GPIB_OK;
+}
+
 static linc_gpib_result_t linc_gpib_write_byte(uint8_t data, bool send_eoi, ULONG timeout_ticks)
 {
     linc_gpib_dav_release();
@@ -249,9 +353,6 @@ static linc_gpib_result_t linc_gpib_write_byte(uint8_t data, bool send_eoi, ULON
     linc_time_delay_us(LINC_GPIB_T1_US);
     linc_gpib_dav_assert();
 
-    /*
-     * Wait until all listeners have accepted the byte.
-     */
     if (!linc_gpib_wait_ndac_released(timeout_ticks))
     {
         linc_gpib_dav_release();
@@ -259,15 +360,8 @@ static linc_gpib_result_t linc_gpib_write_byte(uint8_t data, bool send_eoi, ULON
         return LINC_GPIB_TIMEOUT;
     }
 
-    /*
-     * End the transfer.
-     */
     linc_gpib_dav_release();
 
-    /*
-     * Wait for listeners to return NDAC to the asserted
-     * state before changing DIO for the next byte.
-     */
     if (!linc_gpib_wait_ndac_asserted(timeout_ticks))
     {
         linc_gpib_eoi_release();
@@ -348,21 +442,12 @@ static linc_gpib_result_t linc_gpib_process_write(linc_gpib_request_t* request)
 
     linc_gpib_result_t result = LINC_GPIB_ERROR;
 
-    /*
-     * Establish known source-handshake state first.
-     */
     linc_gpib_dav_release();
     linc_gpib_eoi_release();
     linc_gpib_atn_release();
 
-    /*
-     * We are the talker for the command/address phase.
-     */
     linc_gpib_data_bus_transmit();
 
-    /*
-     * Command phase.
-     */
     linc_gpib_atn_assert();
 
     result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
@@ -405,22 +490,46 @@ static linc_gpib_result_t linc_gpib_process_write(linc_gpib_request_t* request)
 
 cleanup:
     /*
-     * Return the bus to the idle controller state.
+     * Stop the current listener handshake.
      */
-    linc_gpib_dav_release();
-    linc_gpib_eoi_release();
+    linc_gpib_nrfd_assert();
+    linc_gpib_ndac_assert();
 
     /*
-     * Unaddress all listeners so the bus is left in a
-     * known state for the next transaction.
+     * Take control of the bus again.
      */
     linc_gpib_atn_assert();
 
-    if (result == LINC_GPIB_OK)
+    /*
+     * Disconnect DIO before changing direction.
+     */
+    linc_gpib_enable_communication(false);
+
+    /*
+     * We are no longer acting as a listener, so release
+     * our handshake lines before attempting to transmit.
+     */
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    /*
+     * Restore controller transmit direction.
+     */
+    linc_gpib_data_bus_transmit();
+
+    /*
+     * If possible, clear addressing state.
+     */
+    if (result == LINC_GPIB_OK || result == LINC_GPIB_BUFFER_TOO_SMALL)
     {
         linc_gpib_result_t cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
 
-        if (cleanup_result != LINC_GPIB_OK)
+        if (cleanup_result == LINC_GPIB_OK)
+        {
+            cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+        }
+
+        if (cleanup_result != LINC_GPIB_OK && result == LINC_GPIB_OK)
         {
             result = cleanup_result;
         }
@@ -429,7 +538,14 @@ cleanup:
     linc_gpib_atn_release();
 
     /*
-     * Return the transceiver to high impedance.
+     * Make sure we do not participate in listener
+     * handshaking while idle.
+     */
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    /*
+     * Leave DIO high impedance.
      */
     linc_gpib_enable_communication(false);
 
@@ -438,25 +554,373 @@ cleanup:
 
 static linc_gpib_result_t linc_gpib_process_read(linc_gpib_request_t* request)
 {
-    /*
-     * TODO:
-     * Address instrument as talker.
-     * Receive into request->rx_data.
-     */
+    if (request == NULL || request->rx_data == NULL || request->rx_capacity == 0)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
 
-    return LINC_GPIB_OK;
+    linc_gpib_result_t result = LINC_GPIB_ERROR;
+
+    request->rx_length = 0;
+
+    /*
+     * Start in controller/talker state.
+     *
+     * We are NOT acting as a listener during the command
+     * phase, so do not hold NRFD or NDAC asserted.
+     */
+    linc_gpib_dav_release();
+    linc_gpib_eoi_release();
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    linc_gpib_data_bus_transmit();
+    linc_gpib_atn_assert();
+
+    /*
+     * Clear previous addressing.
+     */
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    /*
+     * Address this controller as listener.
+     */
+    result = linc_gpib_write_byte(GPIB_LISTEN_ADDRESS(LINC_GPIB_CONTROLLER_ADDRESS), false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    /*
+     * Address the instrument as talker.
+     */
+    result = linc_gpib_write_byte(GPIB_TALK_ADDRESS(request->address), false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    /*
+     * We are now becoming the active listener.
+     *
+     * Hold the talker off while changing DIO direction.
+     */
+    linc_gpib_nrfd_assert();
+    linc_gpib_ndac_assert();
+
+    linc_gpib_data_bus_receive();
+
+    /*
+     * End command phase and allow the instrument to talk.
+     */
+    linc_gpib_atn_release();
+
+    /*
+     * Ready for the first byte.
+     */
+    linc_gpib_nrfd_release();
+
+    while (request->rx_length < request->rx_capacity)
+    {
+        uint8_t data = 0;
+        bool eoi = false;
+
+        result = linc_gpib_read_byte(&data, &eoi, request->timeout_ticks);
+
+        if (result != LINC_GPIB_OK)
+        {
+            goto cleanup;
+        }
+
+        request->rx_data[request->rx_length++] = data;
+
+        if (eoi)
+        {
+            result = LINC_GPIB_OK;
+            goto cleanup;
+        }
+    }
+
+    /*
+     * Buffer filled before EOI was received.
+     */
+    result = LINC_GPIB_BUFFER_TOO_SMALL;
+
+cleanup:
+    /*
+     * Stop listener handshaking before reclaiming
+     * controller ownership.
+     */
+    linc_gpib_nrfd_assert();
+    linc_gpib_ndac_assert();
+
+    /*
+     * Enter command mode.
+     */
+    linc_gpib_atn_assert();
+
+    /*
+     * Disconnect DIO before changing direction.
+     */
+    linc_gpib_enable_communication(false);
+
+    /*
+     * We are no longer acting as a listener.
+     */
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    /*
+     * If the receive completed normally, clean up
+     * addressing with UNL/UNT.
+     */
+    if (result == LINC_GPIB_OK || result == LINC_GPIB_BUFFER_TOO_SMALL)
+    {
+        linc_gpib_data_bus_transmit();
+
+        linc_gpib_result_t cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+        if (cleanup_result == LINC_GPIB_OK)
+        {
+            cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+        }
+
+        if (result == LINC_GPIB_OK && cleanup_result != LINC_GPIB_OK)
+        {
+            result = cleanup_result;
+        }
+    }
+
+    /*
+     * Return bus controls to idle.
+     */
+    linc_gpib_dav_release();
+    linc_gpib_eoi_release();
+    linc_gpib_atn_release();
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    linc_gpib_enable_communication(false);
+
+    return result;
 }
 
 static linc_gpib_result_t linc_gpib_process_write_read(linc_gpib_request_t* request)
 {
-    /*
-     * TODO:
-     * Write command.
-     * Turn bus around.
-     * Read response.
-     */
+    if (request == NULL || request->tx_data == NULL || request->tx_length == 0 || request->rx_data == NULL ||
+        request->rx_capacity == 0)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
 
-    return LINC_GPIB_OK;
+    linc_gpib_result_t result = LINC_GPIB_ERROR;
+
+    request->rx_length = 0;
+
+    /*
+     * Start in controller/talker state.
+     */
+    linc_gpib_dav_release();
+    linc_gpib_eoi_release();
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    linc_gpib_data_bus_transmit();
+
+    /*
+     * Address instrument as listener.
+     */
+    linc_gpib_atn_assert();
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_LISTEN_ADDRESS(request->address), false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    /*
+     * Send query data.
+     */
+    linc_gpib_atn_release();
+
+    for (size_t i = 0; i < request->tx_length; i++)
+    {
+        bool eoi = request->send_eoi && (i == request->tx_length - 1);
+
+        result = linc_gpib_write_byte(request->tx_data[i], eoi, request->timeout_ticks);
+
+        if (result != LINC_GPIB_OK)
+        {
+            goto cleanup;
+        }
+    }
+
+    /*
+     * Turn the bus around:
+     *
+     *  - Controller becomes listener.
+     *  - Instrument becomes talker.
+     */
+    linc_gpib_atn_assert();
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_LISTEN_ADDRESS(LINC_GPIB_CONTROLLER_ADDRESS), false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    result = linc_gpib_write_byte(GPIB_TALK_ADDRESS(request->address), false, request->timeout_ticks);
+
+    if (result != LINC_GPIB_OK)
+    {
+        goto cleanup;
+    }
+
+    /*
+     * We are about to become the active listener.
+     *
+     * Hold NRFD and NDAC asserted while changing DIO
+     * direction so the instrument cannot begin sending
+     * until we are ready.
+     */
+    linc_gpib_nrfd_assert();
+    linc_gpib_ndac_assert();
+
+    linc_gpib_data_bus_receive();
+
+    /*
+     * End command phase.
+     */
+    linc_gpib_atn_release();
+
+    while (request->rx_length < request->rx_capacity)
+    {
+        uint8_t data = 0;
+        bool eoi = false;
+
+        result = linc_gpib_read_byte(&data, &eoi, request->timeout_ticks);
+
+        if (result != LINC_GPIB_OK)
+        {
+            goto cleanup;
+        }
+
+        request->rx_data[request->rx_length++] = data;
+
+        if (eoi)
+        {
+            result = LINC_GPIB_OK;
+            goto cleanup;
+        }
+    }
+
+    /*
+     * Buffer filled without receiving EOI.
+     */
+    result = LINC_GPIB_BUFFER_TOO_SMALL;
+
+cleanup:
+    /*
+     * Stop listener handshaking before reclaiming
+     * control of the bus.
+     */
+    linc_gpib_nrfd_assert();
+    linc_gpib_ndac_assert();
+
+    /*
+     * Enter command mode before changing DIO direction.
+     */
+    linc_gpib_atn_assert();
+
+    /*
+     * Disconnect the data transceiver while turning
+     * the bus back around.
+     */
+    linc_gpib_enable_communication(false);
+
+    /*
+     * We are no longer participating as a listener.
+     * Release our handshake lines so they do not block
+     * the controller's command transfer.
+     */
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    linc_gpib_data_bus_transmit();
+
+    /*
+     * Try to leave addressing in a known state even
+     * after a failed receive. Preserve the original
+     * transaction error if one already occurred.
+     */
+    linc_gpib_result_t cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNL, false, request->timeout_ticks);
+
+    if (cleanup_result == LINC_GPIB_OK)
+    {
+        cleanup_result = linc_gpib_write_byte(GPIB_COMMAND_UNT, false, request->timeout_ticks);
+    }
+
+    if (result == LINC_GPIB_OK && cleanup_result != LINC_GPIB_OK)
+    {
+        result = cleanup_result;
+    }
+
+    /*
+     * Return everything to idle.
+     */
+    linc_gpib_dav_release();
+    linc_gpib_eoi_release();
+    linc_gpib_atn_release();
+    linc_gpib_nrfd_release();
+    linc_gpib_ndac_release();
+
+    linc_gpib_enable_communication(false);
+
+    return result;
 }
 
 static linc_gpib_result_t linc_gpib_process_clear(linc_gpib_request_t* request)
