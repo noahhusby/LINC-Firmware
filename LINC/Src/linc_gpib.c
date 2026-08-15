@@ -153,7 +153,7 @@ static void linc_gpib_init_management(void)
     HAL_GPIO_Init(GPIOC, &GPIOC_InitStruct);
 }
 
-void linc_gpib_init(void)
+static void linc_gpib_init(void)
 {
     linc_gpib_init_data_bus();
     linc_gpib_init_management();
@@ -315,4 +315,122 @@ static VOID linc_gpib_thread_entry(ULONG thread_input)
             linc_gpib_update_status();
         }
     }
+}
+
+linc_gpib_result_t linc_gpib_write(uint8_t address, const uint8_t* data, size_t length, bool send_eoi)
+{
+    if (data == NULL || length == 0 || address > 30)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
+
+    linc_gpib_request_t request = {
+        .type = LINC_GPIB_REQUEST_WRITE,
+        .address = address,
+        .tx_data = data,
+        .tx_length = length,
+        .rx_data = NULL,
+        .rx_capacity = 0,
+        .rx_length = 0,
+        .send_eoi = send_eoi,
+        .timeout_ticks = TX_TIMER_TICKS_PER_SECOND,
+        .result = LINC_GPIB_ERROR,
+    };
+
+    if (tx_semaphore_create(&request.complete, "GPIB Request", 0) != TX_SUCCESS)
+    {
+        return LINC_GPIB_ERROR;
+    }
+
+    if (linc_gpib_submit(&request) != TX_SUCCESS)
+    {
+        tx_semaphore_delete(&request.complete);
+        return LINC_GPIB_ERROR;
+    }
+
+    tx_semaphore_get(&request.complete, TX_WAIT_FOREVER);
+    tx_semaphore_delete(&request.complete);
+
+    return request.result;
+}
+
+linc_gpib_result_t linc_gpib_read(uint8_t address, uint8_t* data, size_t capacity, size_t* length)
+{
+    if (data == NULL || length == NULL || capacity == 0 || address > 30)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
+
+    linc_gpib_request_t request = {
+        .type = LINC_GPIB_REQUEST_READ,
+        .address = address,
+        .tx_data = NULL,
+        .tx_length = 0,
+        .rx_data = data,
+        .rx_capacity = capacity,
+        .rx_length = 0,
+        .send_eoi = false,
+        .timeout_ticks = TX_TIMER_TICKS_PER_SECOND,
+        .result = LINC_GPIB_ERROR,
+    };
+
+    if (tx_semaphore_create(&request.complete, "GPIB Request", 0) != TX_SUCCESS)
+    {
+        return LINC_GPIB_ERROR;
+    }
+
+    if (linc_gpib_submit(&request) != TX_SUCCESS)
+    {
+        tx_semaphore_delete(&request.complete);
+        return LINC_GPIB_ERROR;
+    }
+
+    tx_semaphore_get(&request.complete, TX_WAIT_FOREVER);
+
+    *length = request.rx_length;
+
+    tx_semaphore_delete(&request.complete);
+
+    return request.result;
+}
+
+linc_gpib_result_t linc_gpib_query(uint8_t address, const uint8_t* tx_data, size_t tx_length, uint8_t* rx_data,
+                                   size_t rx_capacity, size_t* rx_length)
+{
+    if (tx_data == NULL || tx_length == 0 || rx_data == NULL || rx_capacity == 0 || rx_length == NULL || address > 30)
+    {
+        return LINC_GPIB_INVALID_ARGUMENT;
+    }
+
+    linc_gpib_request_t request = {
+        .type = LINC_GPIB_REQUEST_WRITE_READ,
+        .address = address,
+        .tx_data = tx_data,
+        .tx_length = tx_length,
+        .rx_data = rx_data,
+        .rx_capacity = rx_capacity,
+        .rx_length = 0,
+        .send_eoi = true,
+        .timeout_ticks = TX_TIMER_TICKS_PER_SECOND,
+        .result = LINC_GPIB_ERROR,
+    };
+
+    if (tx_semaphore_create(&request.complete, "GPIB Request", 0) != TX_SUCCESS)
+    {
+        return LINC_GPIB_ERROR;
+    }
+
+    if (linc_gpib_submit(&request) != TX_SUCCESS)
+    {
+        tx_semaphore_delete(&request.complete);
+        return LINC_GPIB_ERROR;
+    }
+
+    tx_semaphore_get(&request.complete, TX_WAIT_FOREVER);
+
+    *rx_length = request.rx_length;
+
+    tx_semaphore_delete(&request.complete);
+
+    return request.result;
 }
