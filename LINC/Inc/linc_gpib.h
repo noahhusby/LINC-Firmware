@@ -21,6 +21,13 @@ typedef struct
     bool eoi;
 } linc_gpib_status_t;
 
+enum CommunicationDirection
+{
+    CONTROLLER_TO_INSTRUMENT,
+    INSTRUMENT_TO_CONTROLLER,
+};
+
 VOID linc_gpib_thread_entry(ULONG thread_input);
 
 linc_gpib_status_t linc_gpib_get_status(void);
+void linc_gpib_init(void);
