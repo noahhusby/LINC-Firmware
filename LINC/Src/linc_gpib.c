@@ -272,6 +272,10 @@ static bool linc_gpib_wait_dav_released(ULONG timeout)
     return linc_gpib_wait_pin(DAV_SENSE_GPIO_Port, DAV_SENSE_Pin, false, timeout);
 }
 
+static void linc_gpib_ren_assert(void) { HAL_GPIO_WritePin(iREN_GPIO_Port, iREN_Pin, GPIO_PIN_RESET); }
+
+static void linc_gpib_ren_release(void) { HAL_GPIO_WritePin(iREN_GPIO_Port, iREN_Pin, GPIO_PIN_SET); }
+
 static linc_gpib_result_t linc_gpib_read_byte(uint8_t* data, bool* eoi, ULONG timeout_ticks)
 {
     if (data == NULL || eoi == NULL)
@@ -377,6 +381,8 @@ static void linc_gpib_init(void)
 {
     linc_gpib_init_data_bus();
     linc_gpib_init_management();
+
+    linc_gpib_ren_assert();
 }
 
 UINT linc_gpib_create(TX_BYTE_POOL* byte_pool)
