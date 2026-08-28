@@ -257,6 +257,18 @@ uint16_t USBD_Get_Configuration_Number(uint8_t class_type, uint8_t interface_typ
 
 /* Private defines -----------------------------------------------------------*/
 /* USER CODE BEGIN Private_defines */
+#define CLASS_TYPE_USBTMC \
+((USBD_CompositeClassTypeDef)13U)
+
+/* USBTMC Bulk OUT endpoint */
+#define USBD_USBTMC_EPOUT_ADDR             0x04U
+#define USBD_USBTMC_EPOUT_FS_MPS           64U
+#define USBD_USBTMC_EPOUT_HS_MPS           512U
+
+/* USBTMC Bulk IN endpoint */
+#define USBD_USBTMC_EPIN_ADDR              0x84U
+#define USBD_USBTMC_EPIN_FS_MPS            64U
+#define USBD_USBTMC_EPIN_HS_MPS            512U
 
 /* USER CODE END Private_defines */
 

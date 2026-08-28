@@ -54,6 +54,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     LINC/Src/usb/linc_usb_cli.c
     LINC/Src/usb/linc_usb_cli_commands.c
     LINC/Src/usb/linc_usb_cli_parser.c
+    USBX/App/ux_device_usbtmc.c
 )
 
 # Add include paths
@@ -61,6 +62,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     LINC/Inc
     LINC/Inc/usb
+    USBX/App
 )
 
 # Add project symbols (macros)

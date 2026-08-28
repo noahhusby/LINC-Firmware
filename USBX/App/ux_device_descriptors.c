@@ -126,6 +126,9 @@ static void USBD_FrameWork_CDCDesc(USBD_DevClassHandleTypeDef *pdev,
 #endif /* USBD_CDC_ACM_CLASS_ACTIVATED == 1U */
 
 /* USER CODE BEGIN PFP */
+static void USBD_FrameWork_USBTMCDesc(USBD_DevClassHandleTypeDef *pdev,
+                                      uint32_t pConf,
+                                      uint32_t *Sze);
 
 /* USER CODE END PFP */
 
@@ -145,7 +148,7 @@ uint8_t *USBD_Get_Device_Framework_Speed(uint8_t Speed, ULONG *Length)
 {
   uint8_t *pFrameWork = NULL;
   /* USER CODE BEGIN Device_Framework0 */
-
+  UserClassInstance[1] = (uint8_t)CLASS_TYPE_USBTMC;
   /* USER CODE END Device_Framework0 */
 
   if (USBD_FULL_SPEED == Speed)
@@ -568,7 +571,55 @@ uint8_t  USBD_FrameWork_AddToConfDesc(USBD_DevClassHandleTypeDef *pdev, uint8_t 
 #endif /* USBD_CDC_ACM_CLASS_ACTIVATED */
 
     /* USER CODE BEGIN FrameWork_AddToConfDesc_1 */
+      /* USER CODE BEGIN FrameWork_AddToConfDesc_1 */
 
+    case CLASS_TYPE_USBTMC:
+
+      /* USBTMC has one interface. */
+      interface = USBD_FrameWork_FindFreeIFNbr(pdev);
+
+      pdev->tclasslist[pdev->classId].NumIf = 1U;
+      pdev->tclasslist[pdev->classId].Ifs[0] = interface;
+
+      /* Base USBTMC uses Bulk OUT and Bulk IN. */
+      pdev->tclasslist[pdev->classId].NumEps = 2U;
+
+      if (Speed == USBD_HIGH_SPEED)
+      {
+        /* Bulk OUT */
+        USBD_FrameWork_AssignEp(pdev,
+                                USBD_USBTMC_EPOUT_ADDR,
+                                USBD_EP_TYPE_BULK,
+                                USBD_USBTMC_EPOUT_HS_MPS);
+
+        /* Bulk IN */
+        USBD_FrameWork_AssignEp(pdev,
+                                USBD_USBTMC_EPIN_ADDR,
+                                USBD_EP_TYPE_BULK,
+                                USBD_USBTMC_EPIN_HS_MPS);
+      }
+      else
+      {
+        /* Bulk OUT */
+        USBD_FrameWork_AssignEp(pdev,
+                                USBD_USBTMC_EPOUT_ADDR,
+                                USBD_EP_TYPE_BULK,
+                                USBD_USBTMC_EPOUT_FS_MPS);
+
+        /* Bulk IN */
+        USBD_FrameWork_AssignEp(pdev,
+                                USBD_USBTMC_EPIN_ADDR,
+                                USBD_EP_TYPE_BULK,
+                                USBD_USBTMC_EPIN_FS_MPS);
+      }
+
+      USBD_FrameWork_USBTMCDesc(pdev,
+                                (uint32_t)pCmpstConfDesc,
+                                &pdev->CurrConfDescSz);
+
+      break;
+
+      /* USER CODE END FrameWork_AddToConfDesc_1 */
     /* USER CODE END FrameWork_AddToConfDesc_1 */
 
     default:
@@ -762,5 +813,61 @@ static void USBD_FrameWork_CDCDesc(USBD_DevClassHandleTypeDef *pdev,
 #endif /* USBD_CDC_ACM_CLASS_ACTIVATED == 1 */
 
 /* USER CODE BEGIN 1 */
+static void USBD_FrameWork_USBTMCDesc(USBD_DevClassHandleTypeDef *pdev,
+                                      uint32_t pConf,
+                                      uint32_t *Sze)
+{
+  /*
+   * These names are required by the ST descriptor macros below.
+   */
+  USBD_IfDescTypedef *pIfDesc;
+  USBD_EpDescTypedef *pEpDesc;
+
+  /*
+   * USBTMC Interface
+   *
+   * Class:    0xFE = Application Specific
+   * Subclass: 0x03 = Test and Measurement
+   * Protocol: 0x00 = USBTMC
+   *
+   * Two endpoints:
+   *   Bulk OUT
+   *   Bulk IN
+   */
+  __USBD_FRAMEWORK_SET_IF(
+      pdev->tclasslist[pdev->classId].Ifs[0],
+      0U,
+      2U,
+      0xFEU,
+      0x03U,
+      0x00U,
+      0U);
+
+  /* Bulk OUT endpoint */
+  __USBD_FRAMEWORK_SET_EP(
+      pdev->tclasslist[pdev->classId].Eps[0].add,
+      USBD_EP_TYPE_BULK,
+      (uint16_t)pdev->tclasslist[pdev->classId].Eps[0].size,
+      0U,
+      0U);
+
+  /* Bulk IN endpoint */
+  __USBD_FRAMEWORK_SET_EP(
+      pdev->tclasslist[pdev->classId].Eps[1].add,
+      USBD_EP_TYPE_BULK,
+      (uint16_t)pdev->tclasslist[pdev->classId].Eps[1].size,
+      0U,
+      0U);
+
+  /*
+   * USBTMC adds one interface to this configuration.
+   */
+  ((USBD_ConfigDescTypedef *)pConf)->bNumInterfaces += 1U;
+
+  /*
+   * Update the total configuration descriptor size.
+   */
+  ((USBD_ConfigDescTypedef *)pConf)->wDescriptorLength = *Sze;
+}
 
 /* USER CODE END 1 */
