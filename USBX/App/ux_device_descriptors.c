@@ -619,7 +619,6 @@ uint8_t  USBD_FrameWork_AddToConfDesc(USBD_DevClassHandleTypeDef *pdev, uint8_t 
 
       break;
 
-      /* USER CODE END FrameWork_AddToConfDesc_1 */
     /* USER CODE END FrameWork_AddToConfDesc_1 */
 
     default:
