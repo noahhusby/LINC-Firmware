@@ -9,6 +9,7 @@
 #include "linc_gpib.h"
 #include "linc_status_led.h"
 #include "linc_time.h"
+#include "linc_usbtmc.h"
 #include "../Inc/usb/linc_usb.h"
 
 #define LINC_STATUS_LED_STACK_SIZE 512
@@ -43,5 +44,12 @@ UINT linc_threads_create(TX_BYTE_POOL* byte_pool)
     {
         return TX_THREAD_ERROR;
     }
+
+    linc_usbtmc_init();
+    if (linc_usbtmc_create(byte_pool) != TX_SUCCESS)
+    {
+        return TX_THREAD_ERROR;
+    }
+
     return status;
 }

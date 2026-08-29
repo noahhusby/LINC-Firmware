@@ -233,6 +233,11 @@ static VOID app_ux_device_thread_entry(ULONG thread_input)
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPOUT_ADDR, PCD_SNG_BUF, 0xC0);
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPIN_ADDR, PCD_SNG_BUF, 0x100);
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_CDCACM_EPINCMD_ADDR, PCD_SNG_BUF, 0x140);
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_USBTMC_EPOUT_ADDR,
+                    PCD_SNG_BUF, 0x180);
+
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, USBD_USBTMC_EPIN_ADDR,
+                      PCD_SNG_BUF, 0x1C0);
 
   if (MX_USBX_Device_Stack_Init() != UX_SUCCESS) {
     Error_Handler();

@@ -1,11 +1,12 @@
 #include "ux_device_usbtmc.h"
+#include "linc_usbtmc.h"
 
 static UINT ux_device_usbtmc_initialize(UX_SLAVE_CLASS_COMMAND *command);
 static UINT ux_device_usbtmc_uninitialize(UX_SLAVE_CLASS_COMMAND *command);
 static UINT ux_device_usbtmc_activate(UX_SLAVE_CLASS_COMMAND *command);
 static UINT ux_device_usbtmc_deactivate(UX_SLAVE_CLASS_COMMAND *command);
 static UINT ux_device_usbtmc_control_request(UX_SLAVE_CLASS_COMMAND *command);
-
+static UINT ux_device_usbtmc_query(UX_SLAVE_CLASS_COMMAND *command);
 
 UINT ux_device_usbtmc_entry(UX_SLAVE_CLASS_COMMAND *command)
 {
@@ -25,6 +26,9 @@ UINT ux_device_usbtmc_entry(UX_SLAVE_CLASS_COMMAND *command)
 
         case UX_SLAVE_CLASS_COMMAND_REQUEST:
             return ux_device_usbtmc_control_request(command);
+
+        case UX_SLAVE_CLASS_COMMAND_QUERY:
+            return ux_device_usbtmc_query(command);
 
         default:
             return UX_FUNCTION_NOT_SUPPORTED;
@@ -123,6 +127,8 @@ static UINT ux_device_usbtmc_activate(UX_SLAVE_CLASS_COMMAND *command)
         return UX_ERROR;
     }
 
+    linc_usbtmc_activate(usbtmc);
+
     return UX_SUCCESS;
 }
 
@@ -134,6 +140,8 @@ static UINT ux_device_usbtmc_deactivate(UX_SLAVE_CLASS_COMMAND *command)
 
     class_ptr = command->ux_slave_class_command_class_ptr;
     usbtmc = (UX_DEVICE_USBTMC *)class_ptr->ux_slave_class_instance;
+
+    linc_usbtmc_deactivate();
 
     if (usbtmc != UX_NULL)
     {
@@ -153,12 +161,97 @@ static UINT ux_device_usbtmc_deactivate(UX_SLAVE_CLASS_COMMAND *command)
 
 static UINT ux_device_usbtmc_control_request(UX_SLAVE_CLASS_COMMAND *command)
 {
-    UX_PARAMETER_NOT_USED(command);
+    UX_SLAVE_DEVICE *device;
+    UX_SLAVE_TRANSFER *transfer;
 
-    /*
-     * USBTMC class-specific control requests will be implemented here later.
-     */
-    return UX_FUNCTION_NOT_SUPPORTED;
+    UCHAR request;
+
+    device = &_ux_system_slave->ux_system_slave_device;
+
+    transfer =
+        &device->ux_slave_device_control_endpoint
+             .ux_slave_endpoint_transfer_request;
+
+    request = transfer->ux_slave_transfer_request_setup[UX_SETUP_REQUEST];
+
+    switch (request)
+    {
+        case USBTMC_REQUEST_GET_CAPABILITIES:
+        {
+            UCHAR *buffer =
+                transfer->ux_slave_transfer_request_data_pointer;
+
+            /*
+             * USBTMC GET_CAPABILITIES response is 24 bytes.
+             */
+            _ux_utility_memory_set(buffer, 0, 24U);
+
+            /*
+             * Byte 0:
+             * USBTMC_status = SUCCESS
+             */
+            buffer[0] = USBTMC_STATUS_SUCCESS;
+
+            /*
+             * Byte 1:
+             * Reserved
+             */
+            buffer[1] = 0U;
+
+            /*
+             * Bytes 2-3:
+             * bcdUSBTMC = 0x0100
+             */
+            buffer[2] = 0x00U;
+            buffer[3] = 0x01U;
+
+            /*
+             * Byte 4:
+             * Interface capabilities.
+             *
+             * Bit 0 = supports INDICATOR_PULSE
+             *
+             * We do not support it yet.
+             */
+            buffer[4] = 0x00U;
+
+            /*
+             * Byte 5:
+             * Device capabilities.
+             *
+             * Bit 0 = supports TermChar
+             *
+             * We do not support TermChar yet.
+             */
+            buffer[5] = 0x00U;
+
+            /*
+             * Bytes 6-11:
+             * Reserved
+             */
+            buffer[6]  = 0U;
+            buffer[7]  = 0U;
+            buffer[8]  = 0U;
+            buffer[9]  = 0U;
+            buffer[10] = 0U;
+            buffer[11] = 0U;
+
+            /*
+             * Bytes 12-23 are USB488 capability fields.
+             *
+             * Since bInterfaceProtocol = 0x00 and we're not implementing
+             * USB488 yet, leave them all zero.
+             */
+
+            return _ux_device_stack_transfer_request(
+                transfer,
+                24U,
+                24U);
+        }
+
+        default:
+            return UX_FUNCTION_NOT_SUPPORTED;
+    }
 }
 
 
@@ -178,27 +271,35 @@ UINT ux_device_usbtmc_read(UX_DEVICE_USBTMC *usbtmc,
         return UX_INVALID_PARAMETER;
     }
 
-    transfer = &usbtmc->bulk_out_endpoint->ux_slave_endpoint_transfer_request;
+    if (requested_length > UX_SLAVE_REQUEST_DATA_MAX_LENGTH)
+    {
+        return UX_INVALID_PARAMETER;
+    }
 
-    status = _ux_device_stack_transfer_request(transfer,
-                                               requested_length,
-                                               requested_length);
+    transfer =
+        &usbtmc->bulk_out_endpoint->ux_slave_endpoint_transfer_request;
+
+    status = _ux_device_stack_transfer_request(
+        transfer,
+        requested_length,
+        requested_length);
 
     if (status != UX_SUCCESS)
     {
-        *actual_length = 0;
+        *actual_length = 0U;
         return status;
     }
 
-    *actual_length = transfer->ux_slave_transfer_request_actual_length;
+    *actual_length =
+        transfer->ux_slave_transfer_request_actual_length;
 
-    _ux_utility_memory_copy(buffer,
-                            transfer->ux_slave_transfer_request_data_pointer,
-                            *actual_length);
+    _ux_utility_memory_copy(
+        buffer,
+        transfer->ux_slave_transfer_request_data_pointer,
+        *actual_length);
 
     return UX_SUCCESS;
 }
-
 
 UINT ux_device_usbtmc_write(UX_DEVICE_USBTMC *usbtmc,
                             const UCHAR *buffer,
@@ -216,23 +317,43 @@ UINT ux_device_usbtmc_write(UX_DEVICE_USBTMC *usbtmc,
         return UX_INVALID_PARAMETER;
     }
 
-    transfer = &usbtmc->bulk_in_endpoint->ux_slave_endpoint_transfer_request;
+    if (requested_length > UX_SLAVE_REQUEST_DATA_MAX_LENGTH)
+    {
+        return UX_INVALID_PARAMETER;
+    }
 
-    _ux_utility_memory_copy(transfer->ux_slave_transfer_request_data_pointer,
-                            buffer,
-                            requested_length);
+    transfer =
+        &usbtmc->bulk_in_endpoint->ux_slave_endpoint_transfer_request;
 
-    status = _ux_device_stack_transfer_request(transfer,
-                                               requested_length,
-                                               requested_length);
+    _ux_utility_memory_copy(
+        transfer->ux_slave_transfer_request_data_pointer,
+        buffer,
+        requested_length);
+
+    status = _ux_device_stack_transfer_request(
+        transfer,
+        requested_length,
+        requested_length);
 
     if (status != UX_SUCCESS)
     {
-        *actual_length = 0;
+        *actual_length = 0U;
         return status;
     }
 
-    *actual_length = transfer->ux_slave_transfer_request_actual_length;
+    *actual_length =
+        transfer->ux_slave_transfer_request_actual_length;
 
     return UX_SUCCESS;
+}
+
+static UINT ux_device_usbtmc_query(UX_SLAVE_CLASS_COMMAND *command)
+{
+    if ((command->ux_slave_class_command_class == 0xFEU) &&
+        (command->ux_slave_class_command_subclass == 0x03U))
+    {
+        return UX_SUCCESS;
+    }
+
+    return UX_NO_CLASS_MATCH;
 }

@@ -15,6 +15,12 @@ extern "C" {
 
 #define UX_DEVICE_USBTMC_CLASS_NAME ((UCHAR *)"ux_device_usbtmc")
 
+#define USBTMC_REQUEST_GET_CAPABILITIES  7U
+
+#define USBTMC_STATUS_SUCCESS            0x01U
+
+#define USBTMC_BCD_VERSION               0x0100U
+
 typedef struct UX_DEVICE_USBTMC_STRUCT
 {
     UX_SLAVE_INTERFACE *interface;
