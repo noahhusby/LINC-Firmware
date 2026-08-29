@@ -13,7 +13,7 @@ extern "C" {
 #include "ux_api.h"
 #include "ux_device_stack.h"
 
-#define UX_DEVICE_USBTMC_CLASS_NAME "ux_device_usbtmc"
+#define UX_DEVICE_USBTMC_CLASS_NAME ((UCHAR *)"ux_device_usbtmc")
 
 typedef struct UX_DEVICE_USBTMC_STRUCT
 {

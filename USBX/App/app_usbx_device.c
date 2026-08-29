@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "main.h"
 #include "linc_usb.h"
+#include "ux_device_usbtmc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +51,8 @@ static TX_THREAD ux_device_app_thread;
 extern PCD_HandleTypeDef           hpcd_USB_DRD_FS;
 
 /* USER CODE BEGIN PV */
+static ULONG usbtmc_interface_number;
+static ULONG usbtmc_configuration_number;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -185,7 +188,26 @@ UINT MX_USBX_Device_Stack_Init(void)
   /* Initialize and link controller HAL driver */
   ux_dcd_stm32_initialize((ULONG)USB_DRD_FS, (ULONG)&hpcd_USB_DRD_FS);
   /* USER CODE BEGIN MX_USBX_Device_Stack_Init_PostTreatment */
+  usbtmc_configuration_number =
+    USBD_Get_Configuration_Number(CLASS_TYPE_USBTMC, 0);
+
+  usbtmc_interface_number =
+      USBD_Get_Interface_Number(CLASS_TYPE_USBTMC, 0);
+
+  ret = ux_device_stack_class_register(
+      UX_DEVICE_USBTMC_CLASS_NAME,
+      ux_device_usbtmc_entry,
+      usbtmc_configuration_number,
+      usbtmc_interface_number,
+      UX_NULL);
+
+  if (ret != UX_SUCCESS)
+  {
+    return ret;
+  }
+
   /* USER CODE END MX_USBX_Device_Stack_Init_PostTreatment */
+
 
   /* USER CODE BEGIN MX_USBX_Device_Stack_Init 1 */
 
@@ -259,6 +281,13 @@ UINT MX_USBX_Device_Stack_DeInit(void)
   }
 
   /* USER CODE BEGIN MX_USBX_Device_Stack_DeInit_PreTreatment_1 */
+  if (ux_device_stack_class_unregister(
+        UX_DEVICE_USBTMC_CLASS_NAME,
+        ux_device_usbtmc_entry) != UX_SUCCESS)
+  {
+    return UX_ERROR;
+  }
+
   /* USER CODE END MX_USBX_Device_Stack_DeInit_PreTreatment_1 */
 
   /* USER CODE BEGIN MX_USBX_Device_Stack_DeInit_PostTreatment */
