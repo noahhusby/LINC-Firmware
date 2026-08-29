@@ -436,9 +436,9 @@ static uint8_t *USBD_Device_Framework_Builder(USBD_DevClassHandleTypeDef *pdev,
   /* Check if there is a composite class and update device class */
   if (pdev->NumClasses > 1)
   {
-    pDevDesc->bDeviceClass = 0xEF;
-    pDevDesc->bDeviceSubClass = 0x02;
-    pDevDesc->bDeviceProtocol = 0x01;
+    pDevDesc->bDeviceClass = 0x00;
+    pDevDesc->bDeviceSubClass = 0x00;
+    pDevDesc->bDeviceProtocol = 0x00;
   }
   else
   {
